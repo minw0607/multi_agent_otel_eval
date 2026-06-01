@@ -1,0 +1,8 @@
+.DS_Store
+.claude/
+checkpoints/
+__pycache__/
+*.pyc
+.env
+*.json
+!requirements*.json
