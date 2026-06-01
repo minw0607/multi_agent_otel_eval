@@ -4,5 +4,6 @@ checkpoints/
 __pycache__/
 *.pyc
 .env
+outputs/
 *.json
 !requirements*.json
