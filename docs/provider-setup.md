@@ -15,6 +15,15 @@ to switch providers.
 
 ## Azure OpenAI
 
+> **Reference setup for this demo:** an **IP-allowlisted endpoint with API-key auth**
+> (no interactive Microsoft login). This keeps evaluation runs uninterrupted — no
+> login popup on every kernel restart, and long eval loops never break on a token
+> expiry. The trade-off is that **Google Colab cannot connect** (its IPs aren't on
+> the allowlist), so run the notebook **locally**. If you instead use an
+> IP-independent endpoint that requires interactive login, you'd need to add
+> `azure-identity` and a bearer-token provider to `src/config.py` — not covered here,
+> because it adds friction that hurts a live demo.
+
 ### Standard endpoint
 
 ```bash

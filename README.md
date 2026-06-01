@@ -19,6 +19,29 @@
 
 ---
 
+## What This Demo Showcases
+
+As autonomous agents move into production, two questions become mission-critical:
+**can you see what the agent did (observability), and can you prove it did the right
+thing (evaluation)?** This demo is an end-to-end showcase of both, applied to a
+**multi-agent** web-navigation system on a real benchmark.
+
+- **Observability** — Every agent decision, LLM call, and tool invocation is captured
+  as an OpenTelemetry-compliant span. The result is a portable, audit-ready trace tree
+  you can ship to Datadog, Splunk, Phoenix, or Langfuse — the same instrumentation
+  pattern you'd use to monitor agents in production.
+- **Evaluation** — A hybrid scoring engine (deterministic rules + LLM-as-judge),
+  tool-selection correctness metrics, and safety validation quantify *how well* each
+  agent performed — not just whether it finished.
+- **Multi-agent architecture** — A supervisor pattern (Planner → Navigator → Validator)
+  is benchmarked head-to-head against a single-agent baseline, so you can see what
+  orchestration buys you in quality, cost, and traceability.
+
+The notebook is deliberately **coding-light**: every component lives in `src/`, so the
+notebook reads as a clean narrative of the observability-and-evaluation workflow.
+
+---
+
 ## Why This Framework
 
 Most agent evaluation toolkits answer one question: *"Did the agent complete the task?"*
@@ -156,30 +179,14 @@ to enable live web search; without it, READ tools return realistic mock data.
 
 ## Quickstart
 
-### Option A — Google Colab (no local install)
+> **Recommended: run locally with Jupyter.** This demo is designed to run on your
+> own machine. The reference Azure OpenAI setup uses **IP-allowlist access** (no
+> interactive login), which is the smoothest path for uninterrupted evaluation
+> runs — but it means **Google Colab will not work with Azure** (Colab's Google
+> Cloud IPs are not on corporate allowlists). Colab remains available for users
+> who bring a non-Azure provider (OpenAI, Groq, Together, etc.).
 
-> **Azure OpenAI with IP allowlisting:** Colab runs on Google Cloud — its IPs are
-> typically not on corporate allowlists. Use Option B (local) for Azure deployments
-> behind a firewall.
-
-Click the **Open in Colab** badge at the top of this README, then:
-
-1. Add your credentials as Colab Secrets (🔑 in the left sidebar):
-
-   | Secret name | Example value |
-   |---|---|
-   | `OPENAI_API_KEY` | `sk-...` |
-   | `OPENAI_BASE_URL` | `https://api.openai.com/v1` |
-   | `OPENAI_API_VERSION` | `2025-04-01-preview` *(Azure only — leave blank for OpenAI)* |
-   | `AGENT_MODEL` | `gpt-4o` |
-   | `JUDGE_MODEL` | `gpt-4o` |
-   | `TAVILY_API_KEY` | `tvly-...` *(optional — enables real web search)* |
-
-2. Run all cells in order.
-
----
-
-### Option B — Local Setup
+### Option A — Local Setup (recommended)
 
 #### 1. Clone and install
 
@@ -210,6 +217,26 @@ jupyter notebook demo_notebook.ipynb
 
 Run cells in order. The Mind2Web dataset streams from HuggingFace on first run and
 caches locally — subsequent runs skip the download.
+
+---
+
+### Option B — Google Colab (non-Azure providers only)
+
+> ⚠️ **Not compatible with the reference Azure OpenAI setup** (IP allowlisting blocks
+> Colab). Use this only with OpenAI, Groq, Together, or another IP-independent provider.
+
+Click the **Open in Colab** badge at the top of this README, then add your
+credentials as Colab Secrets (🔑 in the left sidebar) and run all cells:
+
+| Secret name | Example value |
+|---|---|
+| `OPENAI_API_KEY` | `sk-...` |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` |
+| `AGENT_MODEL` | `gpt-4o` |
+| `JUDGE_MODEL` | `gpt-4o` |
+| `TAVILY_API_KEY` | `tvly-...` *(optional — enables real web search)* |
+
+> Leave `OPENAI_API_VERSION` **unset** on Colab — it activates Azure mode, which won't connect.
 
 ---
 
