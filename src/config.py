@@ -60,18 +60,29 @@ class Config:
     LLM_WEIGHT          = float(os.environ.get("LLM_WEIGHT", "0.6"))
 
     # =========================================================================
-    # COST TRACKING (per 1M tokens) — update for your model
+    # COST TRACKING (per 1M tokens) — update for your model / contract pricing
     # =========================================================================
+    # NOTE: gpt-5 family pricing is a placeholder — set it to your actual
+    # contract rate. All others reflect public OpenAI list prices.
     COST_PER_1M_TOKENS = {
-        "gpt-4o-input":   2.50,
-        "gpt-4o-output":  10.00,
-        "gpt-4o-mini-input":  0.15,
-        "gpt-4o-mini-output": 0.60,
-        "gpt-4-input":    30.00,
-        "gpt-4-output":   60.00,
-        "gpt-3.5-turbo-input":  0.50,
-        "gpt-3.5-turbo-output": 1.50,
+        "gpt-4o-mini-input":   0.15,  "gpt-4o-mini-output":   0.60,
+        "gpt-4o-input":        2.50,  "gpt-4o-output":       10.00,
+        "gpt-4.1-mini-input":  0.40,  "gpt-4.1-mini-output":  1.60,
+        "gpt-4.1-input":       2.00,  "gpt-4.1-output":       8.00,
+        "gpt-5-input":         2.50,  "gpt-5-output":        10.00,  # placeholder
+        "gpt-4-input":        30.00,  "gpt-4-output":        60.00,
+        "gpt-3.5-turbo-input": 0.50,  "gpt-3.5-turbo-output": 1.50,
     }
+
+    # Families ordered MOST-SPECIFIC first so e.g. "gpt-4-1-..." resolves to
+    # gpt-4.1 ($2/$8) and never to legacy gpt-4 ($30/$60).
+    _COST_FAMILY_ORDER = [
+        "gpt-4o-mini", "gpt-4o",
+        "gpt-4.1-mini", "gpt-4.1",
+        "gpt-5",
+        "gpt-4",
+        "gpt-3.5-turbo",
+    ]
 
     # =========================================================================
     # DATASET
@@ -134,10 +145,18 @@ class Config:
 
     @classmethod
     def get_cost_rate(cls, model: str, direction: str) -> float:
-        """Return cost per 1M tokens for model + direction ('input'/'output')."""
-        for prefix in ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"]:
-            if prefix in model:
-                key = f"{prefix}-{direction}"
+        """
+        Return cost per 1M tokens for model + direction ('input'/'output').
+
+        Deployment names use dashes (e.g. 'gpt-4-1-20250414-gs'), so both the
+        model and the family keys are normalised (dots → dashes) before matching.
+        Families are checked most-specific first, so 'gpt-4-1-...' matches
+        gpt-4.1 rather than legacy gpt-4.
+        """
+        norm = model.lower().replace(".", "-")
+        for family in cls._COST_FAMILY_ORDER:
+            if family.replace(".", "-") in norm:
+                key = f"{family}-{direction}"
                 if key in cls.COST_PER_1M_TOKENS:
                     return cls.COST_PER_1M_TOKENS[key]
         return cls.COST_PER_1M_TOKENS.get(f"gpt-4o-{direction}", 2.50)

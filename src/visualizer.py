@@ -35,10 +35,14 @@ def _style_ax(ax, title: str, xlabel: str = "", ylabel: str = ""):
     ax.grid(True, alpha=0.3, linestyle="--")
 
 
-def plot_eval_dashboard(df: pd.DataFrame, save_path: Optional[Path] = None) -> plt.Figure:
+def plot_eval_dashboard(df: pd.DataFrame, threshold: float = 0.7,
+                        save_path: Optional[Path] = None) -> plt.Figure:
     """
     4-panel evaluation dashboard:
     score distribution | pass/fail | tool F1 | cost/latency
+
+    Args:
+        threshold: pass threshold to display on the score and pass/fail panels.
     """
     fig, axes = plt.subplots(2, 2, figsize=(14, 9))
     fig.suptitle("Evaluation Results Dashboard", fontsize=14, fontweight="bold")
@@ -48,6 +52,8 @@ def plot_eval_dashboard(df: pd.DataFrame, save_path: Optional[Path] = None) -> p
     ax.hist(df["task_score"], bins=15, color=_COLORS["primary"], alpha=0.85, edgecolor="white")
     ax.axvline(df["task_score"].mean(), color=_COLORS["danger"], linestyle="--",
                label=f"Mean: {df['task_score'].mean():.2f}")
+    ax.axvline(threshold, color=_COLORS["neutral"], linestyle=":",
+               label=f"Threshold: {threshold:.2f}")
     ax.legend(fontsize=9)
     _style_ax(ax, "Task Score Distribution", "Score", "Count")
 
@@ -58,7 +64,7 @@ def plot_eval_dashboard(df: pd.DataFrame, save_path: Optional[Path] = None) -> p
     ax.bar(["Pass", "Fail"], [passed, failed],
            color=[_COLORS["primary"], _COLORS["danger"]], alpha=0.85, edgecolor="white")
     ax.bar_label(ax.containers[0], fmt="%d")
-    _style_ax(ax, f"Pass/Fail (threshold: {df['task_score'].mean():.2f})", ylabel="Tasks")
+    _style_ax(ax, f"Pass/Fail (threshold: {threshold:.2f})", ylabel="Tasks")
 
     # Panel 3: Tool F1
     ax = axes[1, 0]

@@ -46,14 +46,20 @@ class ToolCorrectnessResult:
 
 # ---------------------------------------------------------------------------
 # Tool equivalence mapping
-# (Mind2Web uses basic CLICK/TYPE; agent uses richer tool names)
+#
+# Only genuinely interchangeable tools are treated as equivalent. Search tools
+# (site_search / web_search) substitute for each other, but navigation,
+# filtering, and transactions must be matched on their own merits — otherwise
+# recall is trivially perfect and tool_f1 becomes uninformative.
 # ---------------------------------------------------------------------------
 
 TOOL_EQUIVALENTS: Dict[str, List[str]] = {
-    "site_navigation": ["site_navigation", "site_search", "filter_content"],
-    "site_search":     ["site_search", "web_search", "site_navigation"],
-    "web_search":      ["web_search", "site_search"],
-    "filter_content":  ["filter_content", "site_navigation"],
+    "site_search":      ["site_search", "web_search"],
+    "web_search":       ["web_search", "site_search"],
+    "site_navigation":  ["site_navigation"],
+    "filter_content":   ["filter_content"],
+    "make_purchase":    ["make_purchase"],
+    "book_reservation": ["book_reservation"],
 }
 
 
@@ -63,12 +69,38 @@ def _tools_equivalent(t1: str, t2: str) -> bool:
     return t2 in TOOL_EQUIVALENTS.get(t1, []) or t1 in TOOL_EQUIVALENTS.get(t2, [])
 
 
+def _action_to_tool(action: str) -> str:
+    """
+    Map a single Mind2Web action string → the tool that best represents it.
+
+    Action format: '[element]  label -> ACTION: value'
+    The mapping uses both the action verb and label/element keywords so that
+    the reference tool sequence reflects real task diversity (search, filter,
+    navigate, purchase) rather than collapsing everything to navigation.
+    """
+    a   = action.upper()
+    low = action.lower()
+
+    # Transaction intents
+    if any(k in low for k in ("add to cart", "buy", "checkout", "place order", "purchase")):
+        return "make_purchase"
+    if any(k in low for k in ("book", "reserve", "reservation")):
+        return "book_reservation"
+    # Sorting / filtering (dropdown SELECT or filter/sort labels)
+    if "SELECT" in a or any(k in low for k in ("sort", "filter", "refine")):
+        return "filter_content"
+    # Typing into a search field
+    if "TYPE" in a and any(k in low for k in ("search", "find", "query", "keyword")):
+        return "site_search"
+    # Default: clicks, typing into form fields, scrolls
+    return "site_navigation"
+
+
 def _actions_to_tools(action_reprs: List[str]) -> List[str]:
-    """Map Mind2Web action strings → expected tool names (deduplicated)."""
-    NAV_VERBS = {"CLICK", "TYPE", "SELECT", "SCROLL", "OPEN", "SUBMIT"}
+    """Map a Mind2Web action sequence → expected tools (consecutive-deduplicated)."""
     tools, last = [], None
     for action in action_reprs:
-        tool = "site_navigation" if any(v in action.upper() for v in NAV_VERBS) else "site_navigation"
+        tool = _action_to_tool(action)
         if tool != last:
             tools.append(tool)
             last = tool

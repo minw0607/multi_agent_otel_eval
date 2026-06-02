@@ -87,10 +87,14 @@ def create_baseline_agent(config: Config = None):
 
 
 def run_agent(task: Mind2WebTask, agent, tracing_manager: TracingManager,
-              config: Config = None) -> Tuple[str, object]:
+              config: Config = None, hier_tracer: HierarchicalTracer = None) -> Tuple[str, object]:
     """
     Run the baseline agent on one task and return (agent_output, trace).
     All token counting and cost tracking is done inside this function.
+
+    If `hier_tracer` is provided, an OpenTelemetry span tree is also emitted
+    (task.execute → agent.react.execute → tool.execute per tool call), so the
+    baseline path produces the same observability artifacts as the multi-agent path.
     """
     cfg   = config or Config
     trace = tracing_manager.start_trace(task.idx)
@@ -99,11 +103,20 @@ def run_agent(task: Mind2WebTask, agent, tracing_manager: TracingManager,
                   f"Website: {task.website}\nDomain: {task.domain}\n\n"
                   "Complete this task using available tools.")
 
+    root = None
+    if hier_tracer is not None:
+        root = hier_tracer.start_trace(
+            SPAN_NAMES["TASK_ROOT"],
+            attributes={"task_id": task.idx, "website": task.website,
+                        "gen_ai.agent.name": "baseline_react"},
+        )
+
     try:
         run_config = {
             "configurable": {"thread_id": f"task_{task.idx}"},
             "recursion_limit": 50,
         }
+        agent_span = hier_tracer.start_span("agent.react.execute") if hier_tracer else None
         result      = agent.invoke({"messages": [HumanMessage(content=task_input)]}, config=run_config)
         agent_output = ""
         tool_calls   = []
@@ -113,8 +126,16 @@ def run_agent(task: Mind2WebTask, agent, tracing_manager: TracingManager,
                 agent_output += str(msg.content) + "\n"
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
-                    tool_calls.append({"tool": tc.get("name", "?"), "args": tc.get("args", {})})
-                    tracing_manager.log_tool_call(tc.get("name", "?"), tc.get("args", {}), "called")
+                    name = tc.get("name", "?")
+                    tool_calls.append({"tool": name, "args": tc.get("args", {})})
+                    tracing_manager.log_tool_call(name, tc.get("args", {}), "called")
+                    if hier_tracer is not None:
+                        ts = hier_tracer.start_span(SPAN_NAMES["TOOL_CALL"],
+                                                    attributes={"gen_ai.tool.name": name})
+                        hier_tracer.end_span(ts)
+
+        if hier_tracer is not None:
+            hier_tracer.end_span(agent_span, attributes={"tool_calls": len(tool_calls)})
 
         # Token counting
         try:
@@ -143,11 +164,18 @@ def run_agent(task: Mind2WebTask, agent, tracing_manager: TracingManager,
         trace.total_cost = trace.agent_cost + trace.judge_cost
         trace.tool_calls = tool_calls
         trace.finish()
+        if hier_tracer is not None:
+            root.set_attribute("gen_ai.usage.input_tokens", in_tok)
+            root.set_attribute("gen_ai.usage.output_tokens", out_tok)
+            root.set_attribute("gen_ai.usage.cost_usd", round(trace.total_cost, 6))
+            hier_tracer.end_trace()
         return agent_output, trace
 
     except Exception as e:
         trace.errors.append(f"{type(e).__name__}: {e}")
         trace.finish()
+        if hier_tracer is not None:
+            hier_tracer.end_trace()
         return f"Error: {e}", trace
 
 
