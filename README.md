@@ -166,6 +166,31 @@ chart, and an auto-generated interpretation of which system won and why.
 
 ---
 
+## Audit-Grade Reporting
+
+The final step generates a structured Markdown **evaluation report** (`src/report.py`)
+suitable for model-risk review:
+
+```
+evaluation_report_<timestamp>.md
+├── 1. Executive Summary        — key findings & observations
+├── 2. Testing Scope            — what we test · Mind2Web data · regulations & compliance
+├── 3. Testing Approach         — hybrid sandbox method · scoring stack · judge model
+├── 4. Testing Results          — section-by-section assessment + embedded visualization
+│      4.1 Task completion   4.2 Tool correctness   4.3 Safety
+│      4.4 Cost & performance 4.5 Single-vs-multi   4.6 Observability
+├── 5. Conclusion               — recommendation from the cost/quality trade-off
+└── 6. Appendices               — artifacts · per-task audit trail · AI disclosure
+```
+
+**Hybrid, audit-safe assessment.** All tables, metrics, pass/fail decisions, and the
+audit trail are computed **deterministically** (rule-based). When a judge LLM is
+supplied, each section also gets a narrative clearly labeled **🤖 AI Assessment** with
+a disclosure notice — so LLM inference is never confused with the deterministic
+record. This separation maps directly to NIST AI RMF transparency requirements.
+
+---
+
 ## Hybrid Real + Mock Tool Environment
 
 The industry-standard approach for **safe** pre-deployment agent evaluation:
@@ -272,17 +297,20 @@ multi_agent_otel_eval/
 │   ├── tools.py                    ← Hybrid real/mock web-navigation tools
 │   ├── dataset.py                  ← Mind2Web streaming loader with local cache
 │   ├── agents.py                   ← Baseline ReAct + multi-agent supervisor pipeline
+│   ├── runner.py                   ← evaluate_batch() — runs N tasks through either system
 │   ├── evaluator.py                ← HybridEvaluator + ToolCorrectnessEval
-│   └── visualizer.py               ← Eval dashboard, trace tree, telemetry charts
+│   ├── visualizer.py               ← Eval dashboard, trace tree, telemetry, comparison charts
+│   └── report.py                   ← Audit-grade Markdown report generator
 │
 ├── docs/
 │   └── provider-setup.md           ← Step-by-step setup for Azure, OpenAI, Ollama, Groq
 │
-└── outputs/                        ← Results, traces, charts (gitignored)
+└── outputs/                        ← Results, traces, charts, reports (gitignored)
     ├── traces/                     ← OTLP JSON span exports
     ├── data/                       ← Cached Mind2Web dataset
-    ├── eval_dashboard.png
-    └── quick_test_results_*.csv
+    ├── baseline_vs_multi.png
+    ├── single_agent_*.csv / multi_agent_*.csv
+    └── evaluation_report_*.md      ← Audit-grade report
 ```
 
 ---
