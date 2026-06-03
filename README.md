@@ -140,18 +140,29 @@ Standard attributes captured per span: `gen_ai.system`, `gen_ai.request.model`,
 
 ---
 
-## Single-Agent vs. Multi-Agent
+## Single-Agent vs. Multi-Agent System (the core story)
 
-The framework runs the **same evaluation** against two architectures so you can
-quantify the cost/quality trade-off of orchestration:
+The demo runs the **same tasks** through two architectures and puts the trade-off
+side by side — *when is orchestration worth it?*
 
-| Architecture | Pattern | When it helps |
-|---|---|---|
-| **Baseline** | One ReAct agent with all tools | Simple, fast, lower cost |
-| **Multi-agent** | Supervisor → Planner → Navigator → Validator | Complex multi-step tasks, better decomposition, full span tree |
+| Architecture | Pattern | Specialists | Models |
+|---|---|---|---|
+| **Single Agent** | One ReAct loop with all tools | 1 | `AGENT_MODEL` |
+| **Multi-Agent System** | Supervisor → Planner → Navigator → Validator | 4 | per-role (configurable) |
 
-Both produce identical metrics (task score, tool F1, cost, latency), enabling a
-direct head-to-head comparison.
+In the **MAS**, work is divided: the **Planner** decomposes the task, the
+**Navigator** executes it with tools, and the **Validator** independently checks the
+result. This decomposition tends to **lift task quality on complex, multi-step
+tasks** — at the cost of more tokens and latency (4 LLM roles vs. 1).
+
+Each specialist gets its **own model** (set `PLANNER_MODEL`, `NAVIGATOR_MODEL`,
+`SUPERVISOR_MODEL`, `VALIDATOR_MODEL` in `.env`) and its **own OTel span** with
+per-agent cost attribution. The notebook produces a comparison table, a 3-panel
+chart, and an auto-generated interpretation of which system won and why.
+
+> **Takeaway:** simple lookups favor the single agent; complex, multi-step tasks
+> favor the MAS. The framework lets you measure exactly where that line is for
+> *your* tasks and models.
 
 ---
 

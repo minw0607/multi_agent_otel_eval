@@ -255,3 +255,46 @@ def plot_dataset_overview(tasks: list, save_path: Optional[Path] = None) -> plt.
     if save_path:
         fig.savefig(save_path, dpi=120, bbox_inches="tight")
     return fig
+
+
+def plot_baseline_vs_multi(df_baseline: pd.DataFrame, df_multi: pd.DataFrame,
+                           save_path: Optional[Path] = None) -> plt.Figure:
+    """
+    3-panel single-agent vs. multi-agent comparison: pass rate, avg task score,
+    and avg cost per task. Bars are annotated with the relative change so the
+    quality/cost trade-off of orchestration is immediately visible.
+    """
+    labels = ["Single Agent", "Multi-Agent\n(Supervisor)"]
+    colors = [_COLORS["neutral"], _COLORS["primary"]]
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig.suptitle("Single-Agent vs. Multi-Agent System", fontsize=14, fontweight="bold",
+                 color="#1E3A5F")
+
+    def _panel(ax, b_val, m_val, title, fmt, unit_strip="", higher_better=True):
+        bars = ax.bar(labels, [b_val, m_val], color=colors, alpha=0.88,
+                      edgecolor="white", linewidth=2, width=0.55)
+        for bar, val in zip(bars, [b_val, m_val]):
+            ax.text(bar.get_x() + bar.get_width() / 2, val, fmt.format(val),
+                    ha="center", va="bottom", fontsize=12, fontweight="bold", color="#1E3A5F")
+        _style_ax(ax, title)
+        if b_val:
+            pct = (m_val - b_val) / b_val * 100
+            good = (pct >= 0) == higher_better
+            ax.annotate(f"{pct:+.0f}%", xy=(0.5, 0.92), xycoords="axes fraction",
+                        ha="center", fontsize=13, fontweight="bold",
+                        color=_COLORS["primary"] if good else _COLORS["danger"])
+        ax.margins(y=0.18)
+
+    _panel(axes[0], df_baseline["task_passed"].mean() * 100,
+           df_multi["task_passed"].mean() * 100, "Pass Rate (%)", "{:.0f}%")
+    _panel(axes[1], df_baseline["task_score"].mean(),
+           df_multi["task_score"].mean(), "Avg Task Score", "{:.2f}")
+    _panel(axes[2], df_baseline["total_cost"].mean(),
+           df_multi["total_cost"].mean(), "Avg Cost / Task ($)", "${:.4f}",
+           higher_better=False)
+
+    plt.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=120, bbox_inches="tight")
+    return fig

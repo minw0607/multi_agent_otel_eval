@@ -47,6 +47,14 @@ class Config:
     AGENT_MODEL = os.environ.get("AGENT_MODEL", "gpt-4o")    # Executes web tasks
     JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gpt-4o")    # Scores agent output
 
+    # Per-specialist models for the multi-agent system (default to AGENT/JUDGE).
+    # You can assign a cheaper model to the Planner and a stronger one to the
+    # Navigator/Validator — e.g. PLANNER_MODEL=gpt-4o-mini, NAVIGATOR_MODEL=gpt-4o.
+    SUPERVISOR_MODEL = os.environ.get("SUPERVISOR_MODEL", AGENT_MODEL)
+    PLANNER_MODEL    = os.environ.get("PLANNER_MODEL",    AGENT_MODEL)
+    NAVIGATOR_MODEL  = os.environ.get("NAVIGATOR_MODEL",  AGENT_MODEL)
+    VALIDATOR_MODEL  = os.environ.get("VALIDATOR_MODEL",  JUDGE_MODEL)
+
     AGENT_TEMPERATURE = float(os.environ.get("AGENT_TEMPERATURE", "0.3"))
     JUDGE_TEMPERATURE = float(os.environ.get("JUDGE_TEMPERATURE", "0.0"))
     AGENT_MAX_TOKENS  = int(os.environ.get("AGENT_MAX_TOKENS", "2000"))
@@ -107,15 +115,18 @@ class Config:
     # LLM FACTORY
     # =========================================================================
     @classmethod
-    def create_llm(cls, role: str = "agent"):
+    def create_llm(cls, role: str = "agent", model: str = None):
         """
         Return a LangChain chat model for the given role ('agent' or 'judge').
+
+        Pass `model` to override the model name (used by the multi-agent system
+        to give each specialist its own model).
 
         Auto-detection rule:
           OPENAI_API_VERSION is set  →  AzureChatOpenAI
           OPENAI_API_VERSION is blank →  ChatOpenAI (OpenAI / Ollama / Groq / etc.)
         """
-        model      = cls.AGENT_MODEL      if role == "agent" else cls.JUDGE_MODEL
+        model      = model or (cls.AGENT_MODEL if role == "agent" else cls.JUDGE_MODEL)
         temp       = cls.AGENT_TEMPERATURE if role == "agent" else cls.JUDGE_TEMPERATURE
         max_tokens = cls.AGENT_MAX_TOKENS  if role == "agent" else cls.JUDGE_MAX_TOKENS
 
