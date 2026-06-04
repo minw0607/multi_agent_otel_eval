@@ -144,18 +144,23 @@ def generate_report(
         "### Key Findings", "",
     ]
     findings = [
-        f"**Task completion:** MAS pass rate **{_pct(m_pass)}** vs. single-agent "
-        f"**{_pct(s_pass)}** ({'+' if m_pass>=s_pass else ''}{(m_pass-s_pass)*100:.0f} pp).",
-        f"**Quality:** MAS average score **{m_sc:.3f}** vs. **{s_sc:.3f}** for the single agent.",
-        f"**Tool correctness:** MAS tool-F1 **{m_f1:.3f}** vs. **{s_f1:.3f}**.",
-        f"**Cost:** MAS **${m_cost:.4f}/task** vs. **${s_cost:.4f}/task** "
-        f"({m_cost/max(s_cost,1e-9):.1f}× the single-agent cost).",
-        f"**Latency:** MAS **{m_lat:.0f} ms/task** vs. **{s_lat:.0f} ms/task**.",
-        f"**Safety:** **{_pct(safe_rate)}** of MAS outputs passed all safety checks "
-        f"(PII, injection, harmful content).",
-        f"**Overall:** the **{winner}** delivered higher task quality on this sample.",
+        ("F1", f"**Task completion:** MAS pass rate **{_pct(m_pass)}** vs. single-agent "
+               f"**{_pct(s_pass)}** ({'+' if m_pass>=s_pass else ''}{(m_pass-s_pass)*100:.0f} pp). "
+               f"*(see §4.1)*"),
+        ("F2", f"**Quality:** MAS average score **{m_sc:.3f}** vs. **{s_sc:.3f}** for the "
+               f"single agent. *(see §4.1)*"),
+        ("F3", f"**Tool correctness:** MAS tool-F1 **{m_f1:.3f}** vs. **{s_f1:.3f}**. "
+               f"*(see §4.2)*"),
+        ("F4", f"**Cost:** MAS **${m_cost:.4f}/task** vs. **${s_cost:.4f}/task** "
+               f"({m_cost/max(s_cost,1e-9):.1f}× the single-agent cost). *(see §4.4)*"),
+        ("F5", f"**Latency:** MAS **{m_lat:.0f} ms/task** vs. **{s_lat:.0f} ms/task**. "
+               f"*(see §4.4)*"),
+        ("F6", f"**Safety:** **{_pct(safe_rate)}** of MAS outputs passed all safety checks "
+               f"(PII, injection, harmful content). *(see §4.3)*"),
+        ("F7", f"**Overall:** the **{winner}** delivered higher task quality on this sample. "
+               f"*(see §4.5)*"),
     ]
-    L += [f"{i}. {f}" for i, f in enumerate(findings, 1)]
+    L += [f"- **{fid}.** {f}" for fid, f in findings]
     L += _ai_block(
         judge_llm,
         "Write an executive-summary paragraph for an agent evaluation. Metrics — "
@@ -172,12 +177,38 @@ def generate_report(
     L += ["## 2. Testing Scope", ""]
     L += [
         "### 2.1 What We Are Testing", "",
-        "- **System under test:** an LLM web-navigation agent, in two architectures — "
-        "a single ReAct agent and a multi-agent supervisor system.",
+        "We test an LLM **web-navigation agent** in two architectures, built on the "
+        "**LangChain** + **LangGraph** stack, and compare them on identical tasks.",
+        "",
+        "**System A — Single Agent (baseline).** A single **ReAct** agent created with "
+        "LangGraph's `create_react_agent`, given all 11 hybrid tools and a focused system "
+        "prompt. It plans, selects tools, executes, and produces a final answer in one "
+        "reasoning loop. Model: `" + cfg.AGENT_MODEL + "`.",
+        "",
+        "**System B — Multi-Agent System (supervisor pattern).** Work is decomposed across "
+        "four specialists, each a LangChain chat model with its own role, prompt, and "
+        "(optionally) its own model; per-agent token use and cost are tracked individually:",
+        "",
+        "| Specialist | Role | Framework component | Tools | Model |",
+        "|---|---|---|---|---|",
+        "| **Supervisor** | Routes the pipeline (sequential) | LangChain chat model | no | `"
+        + cfg.SUPERVISOR_MODEL + "` |",
+        "| **Planner** | Decomposes the task into 3–5 steps | LangChain chat model | no | `"
+        + cfg.PLANNER_MODEL + "` |",
+        "| **Navigator** | Executes the plan with tools | LangGraph `create_react_agent` | "
+        "**yes** | `" + cfg.NAVIGATOR_MODEL + "` |",
+        "| **Validator** | Independently judges completion & quality | LangChain chat model | "
+        "no | `" + cfg.VALIDATOR_MODEL + "` |",
+        "",
+        "- **Tooling:** 11 hybrid tools (`src/tools.py`) — READ tools fetch live data when "
+        "API keys are present (Tavily) else realistic mocks; WRITE tools (book / purchase / "
+        "submit) are **always mocked**.",
         "- **Capabilities assessed:** task planning, tool selection & sequencing, "
-        "instruction following, output quality, and safety.",
+        "instruction following, output quality, safety, cost, and latency.",
+        "- **Observability:** every step is wrapped in an OpenTelemetry span "
+        "(`HierarchicalTracer`, `src/tracer.py`) following GenAI Semantic Conventions.",
         "- **Out of scope:** live browser execution against production websites "
-        "(the framework scores plans in a sandbox; WRITE actions are mocked).",
+        "(plans are scored in a sandbox; WRITE actions are mocked).",
         "",
         "### 2.2 Testing Data", "",
         f"- **Benchmark:** Mind2Web (NeurIPS 2023, OSU NLP) — natural-language web tasks "
@@ -237,8 +268,10 @@ def generate_report(
     # ====================================================================
     L += ["## 4. Testing Results", ""]
 
-    def _section(num, title, table_rows, assessment, fig_key=None, fig_caption="", ai_prompt=None):
+    def _section(num, title, description, table_rows, assessment,
+                 fig_key=None, fig_caption="", ai_prompt=None):
         block = [f"### 4.{num} {title}", ""]
+        block += [f"**What this measures.** {description}", ""]
         block += table_rows + [""]
         block += [f"**Assessment:** {assessment}", ""]
         if ai_prompt is not None:
@@ -250,14 +283,21 @@ def generate_report(
     # 4.1 Task completion
     L += _section(
         1, "Task Completion",
+        "Whether each agent actually accomplished the task. We score the agent's plan "
+        f"with a hybrid metric: {cfg.RULE_WEIGHT:.0%} deterministic rules (length, "
+        "specificity, goal-keyword alignment, action verbs, overlap with the gold "
+        f"action sequence) + {cfg.LLM_WEIGHT:.0%} LLM-as-judge (holistic 0–1 quality). "
+        f"A task **passes** when the total score ≥ {thr:.2f}. This is the headline "
+        "quality signal cross-referenced by **Executive Summary F1 & F2**.",
         ["| Metric | Single Agent | Multi-Agent |",
          "|---|---|---|",
          f"| Pass rate | {_pct(s_pass)} | {_pct(m_pass)} |",
          f"| Avg total score | {s_sc:.3f} | {m_sc:.3f} |",
          f"| Avg rule score | {df_single['rule_score'].mean():.3f} | {df_multi['rule_score'].mean():.3f} |",
          f"| Avg LLM score | {df_single['llm_score'].mean():.3f} | {df_multi['llm_score'].mean():.3f} |"],
-        f"{_verdict(m_sc, 0.75, 0.6)} — multi-agent completion is "
-        f"{'higher than' if m_sc>s_sc else 'comparable to'} the single-agent baseline.",
+        f"(ref. **F1, F2**) {_verdict(m_sc, 0.75, 0.6)} — multi-agent completion is "
+        f"{'higher than' if m_sc>s_sc else 'comparable to'} the single-agent baseline "
+        f"({_pct(m_pass)} vs. {_pct(s_pass)} pass rate).",
         fig_key="eval", fig_caption="Multi-agent evaluation dashboard (score, pass/fail, tool-F1, cost-vs-latency).",
         ai_prompt=(f"Assess agent task completion: single pass {_pct(s_pass)} score {s_sc:.3f}; "
                    f"multi pass {_pct(m_pass)} score {m_sc:.3f}; threshold {thr:.2f}."),
@@ -266,14 +306,19 @@ def generate_report(
     # 4.2 Tool correctness
     L += _section(
         2, "Tool Correctness",
+        "Whether the agent invoked the *right tools in the right order*. We compare the "
+        "tools actually called (captured from the execution trace) against the tools "
+        "implied by Mind2Web's gold `action_reprs`, reporting precision, recall, and F1. "
+        "Search tools are treated as interchangeable (flexible equivalence), and order "
+        "accuracy uses longest-common-subsequence. Cross-referenced by **F3**.",
         ["| Metric | Single Agent | Multi-Agent |",
          "|---|---|---|",
          f"| Avg F1 | {s_f1:.3f} | {m_f1:.3f} |",
          f"| Avg precision | {df_single['tool_precision'].mean():.3f} | {df_multi['tool_precision'].mean():.3f} |",
          f"| Avg recall | {df_single['tool_recall'].mean():.3f} | {df_multi['tool_recall'].mean():.3f} |",
          f"| Avg tool calls | {df_single['n_tool_calls'].mean():.1f} | {df_multi['n_tool_calls'].mean():.1f} |"],
-        f"{_verdict(m_f1, 0.6, 0.4)} — tool-selection alignment with the reference "
-        "action sequence (flexible equivalence applied).",
+        f"(ref. **F3**) {_verdict(m_f1, 0.6, 0.4)} — tool-selection alignment with the "
+        f"reference sequence (MAS F1 {m_f1:.3f} vs. single {s_f1:.3f}).",
         ai_prompt=(f"Assess tool-selection correctness: single F1 {s_f1:.3f}, multi F1 {m_f1:.3f}. "
                    "Comment on whether the agents chose appropriate tools."),
     )
@@ -281,26 +326,37 @@ def generate_report(
     # 4.3 Safety
     L += _section(
         3, "Safety & Robustness",
+        "Whether agent outputs are safe to surface. Each output is scanned "
+        "deterministically for **PII** (SSN, credit card, email, phone), **prompt "
+        "injection** (XSS, SQL, code execution), and **harmful-content** keywords; we "
+        "also count execution errors. WRITE actions are mocked, so no real-world side "
+        "effects are possible. Cross-referenced by **F6**.",
         ["| Check | MAS pass rate |",
          "|---|---|",
          f"| Overall safety | {_pct(safe_rate)} |",
          f"| Tasks with errors | {int(df_multi['errors'].sum())} / {n} |"],
-        f"{_verdict(safe_rate, 0.99, 0.95)} — no PII leakage, injection, or harmful "
-        "content detected in passing outputs." if safe_rate >= 0.95 else
-        "🔴 Weak — safety violations detected; review flagged tasks.",
+        (f"(ref. **F6**) {_verdict(safe_rate, 0.99, 0.95)} — no PII leakage, injection, "
+         "or harmful content detected in passing outputs.") if safe_rate >= 0.95 else
+        "(ref. **F6**) 🔴 Weak — safety violations detected; review flagged tasks.",
     )
 
     # 4.4 Cost & performance
     L += _section(
         4, "Cost & Performance",
+        "The operational price of each architecture. Cost is computed per call from "
+        "token usage (agent and judge/validator tracked separately) using the rate table "
+        "in `Config`; latency is wall-clock per task. The MAS runs 3–4 LLM roles per "
+        "task vs. 1 for the baseline, so this section quantifies the overhead behind "
+        "**F4 (cost)** and **F5 (latency)**.",
         ["| Metric | Single Agent | Multi-Agent |",
          "|---|---|---|",
          f"| Avg cost / task | ${s_cost:.4f} | ${m_cost:.4f} |",
          f"| Total cost ({n} tasks) | ${df_single['total_cost'].sum():.4f} | ${df_multi['total_cost'].sum():.4f} |",
          f"| Avg latency | {s_lat:.0f} ms | {m_lat:.0f} ms |",
          f"| P95 latency | {df_single['latency_ms'].quantile(0.95):.0f} ms | {df_multi['latency_ms'].quantile(0.95):.0f} ms |"],
-        f"{_verdict(m_cost, s_cost*1.5, s_cost*3, higher_better=False)} — multi-agent "
-        f"overhead is {m_cost/max(s_cost,1e-9):.1f}× cost and {m_lat/max(s_lat,1):.1f}× latency.",
+        f"(ref. **F4, F5**) {_verdict(m_cost, s_cost*1.5, s_cost*3, higher_better=False)} — "
+        f"multi-agent overhead is {m_cost/max(s_cost,1e-9):.1f}× cost and "
+        f"{m_lat/max(s_lat,1):.1f}× latency.",
         fig_key="telemetry", fig_caption="Multi-agent telemetry: tokens, cost, latency percentiles, rolling pass rate.",
     )
 
@@ -311,10 +367,14 @@ def generate_report(
             comp_rows.append(f"| {metric} | {comparison.iloc[0][metric]} | {comparison.iloc[1][metric]} |")
     L += _section(
         5, "Single-Agent vs. Multi-Agent System",
+        "The head-to-head trade-off, consolidating §4.1–4.4 onto the same tasks. The "
+        "question is not which architecture is universally better, but **when the "
+        "multi-agent system's extra cost and latency are justified by higher quality**. "
+        "This is the basis for **Executive Summary F7** and the recommendation in §5.",
         comp_rows,
-        f"On this sample the **{winner}** wins on quality. Multi-agent decomposition "
-        "tends to help most on complex, multi-step tasks; simple lookups favor the "
-        "lower-cost single agent.",
+        f"(ref. **F7**) On this sample the **{winner}** wins on quality. Multi-agent "
+        "decomposition tends to help most on complex, multi-step tasks; simple lookups "
+        "favor the lower-cost single agent.",
         fig_key="comparison", fig_caption="Pass rate, average score, and cost per task — single vs. multi-agent.",
         ai_prompt=("Given single vs multi-agent metrics above, advise when the multi-agent "
                    "system is worth its extra cost and latency."),

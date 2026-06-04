@@ -36,6 +36,10 @@ thing (evaluation)?** This demo is an end-to-end showcase of both, applied to a
 - **Multi-agent architecture** — A supervisor pattern (Planner → Navigator → Validator)
   is benchmarked head-to-head against a single-agent baseline, so you can see what
   orchestration buys you in quality, cost, and traceability.
+- **Audit-grade reporting** — A one-call generator turns the run into a structured
+  Markdown report (executive summary, scope & compliance, section-by-section results,
+  conclusion, audit trail) — deterministic by default, with optional LLM narratives
+  clearly labeled **🤖 AI Assessment**. [See a sample →](docs/sample_evaluation_report.md)
 
 The notebook is deliberately **coding-light**: every component lives in `src/`, so the
 notebook reads as a clean narrative of the observability-and-evaluation workflow.
@@ -188,6 +192,13 @@ audit trail are computed **deterministically** (rule-based). When a judge LLM is
 supplied, each section also gets a narrative clearly labeled **🤖 AI Assessment** with
 a disclosure notice — so LLM inference is never confused with the deterministic
 record. This separation maps directly to NIST AI RMF transparency requirements.
+
+Findings are numbered (**F1–F7**) in the Executive Summary and **cross-referenced**
+from each results section, so a reviewer can trace every headline claim back to its
+underlying metric and assessment.
+
+📥 **[Download a sample report →](docs/sample_evaluation_report.md)** (with embedded
+charts) to see the full output before running anything.
 
 ---
 
