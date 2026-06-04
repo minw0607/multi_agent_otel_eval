@@ -46,6 +46,39 @@ notebook reads as a clean narrative of the observability-and-evaluation workflow
 
 ---
 
+## Sample Results
+
+A 10-task run (single agent vs. multi-agent system) — your numbers will vary by model
+and sample, but the pattern is representative.
+
+**Single-Agent vs. Multi-Agent System** — the multi-agent system lifted the pass rate
+with negligible extra cost:
+
+![Single vs Multi comparison](docs/baseline_vs_multi.png)
+
+| Metric | Single Agent | Multi-Agent | 
+|---|---|---|
+| Pass rate | 60–70% | **90%** |
+| Avg task score | ~0.72 | **~0.80** |
+| Tool F1 | ~0.39 | **~0.51** |
+| Avg cost / task | ~$0.010 | ~$0.010 |
+| Avg latency | ~15 s | ~20 s |
+
+**OpenTelemetry trace tree** — every task is a hierarchical span tree
+(`task.execute → planner → navigator → tool.execute → validator`) with per-agent cost,
+exported to OTLP JSON:
+
+![Multi-agent OTel trace tree](docs/mas_trace_tree.png)
+
+**Evaluation dashboard** — score distribution, pass/fail, tool-F1, and cost-vs-latency:
+
+![Evaluation dashboard](docs/mas_eval_dashboard.png)
+
+> 📄 These visuals come straight from the framework. See the full **[sample evaluation
+> report →](docs/sample_evaluation_report.md)** for the complete write-up.
+
+---
+
 ## Why This Framework
 
 Most agent evaluation toolkits answer one question: *"Did the agent complete the task?"*
@@ -188,10 +221,21 @@ evaluation_report_<timestamp>.md
 ```
 
 **Hybrid, audit-safe assessment.** All tables, metrics, pass/fail decisions, and the
-audit trail are computed **deterministically** (rule-based). When a judge LLM is
-supplied, each section also gets a narrative clearly labeled **🤖 AI Assessment** with
-a disclosure notice — so LLM inference is never confused with the deterministic
-record. This separation maps directly to NIST AI RMF transparency requirements.
+audit trail are computed **deterministically** (rule-based) and are audit-safe.
+
+**Selective LLM judge (default-on, used only when needed).** The LLM judge is enabled
+by default but invoked **only where deterministic interpretation is genuinely
+ambiguous** — borderline scores, mixed cost/quality trade-offs, or safety violations.
+Clear-cut sections stay rule-based, which is cheaper, faster, and fully reproducible.
+Every LLM narrative is labeled **🤖 AI Assessment** with a disclosure notice, so LLM
+inference is never confused with the deterministic record (mapping to NIST AI RMF
+transparency).
+
+```python
+generate_report(..., use_llm=True,  llm_selective=True)   # default — AI only when ambiguous
+generate_report(..., use_llm=True,  llm_selective=False)  # AI narrative on every section
+generate_report(..., use_llm=False)                       # fully deterministic, no LLM calls
+```
 
 Findings are numbered (**F1–F7**) in the Executive Summary and **cross-referenced**
 from each results section, so a reviewer can trace every headline claim back to its

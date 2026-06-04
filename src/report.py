@@ -72,6 +72,8 @@ def generate_report(
     *,
     config: Config = None,
     judge_llm=None,
+    use_llm: bool = True,
+    llm_selective: bool = True,
     tracer=None,
     output_dir: Optional[Path] = None,
     figures: Optional[Dict[str, str]] = None,
@@ -79,11 +81,27 @@ def generate_report(
     """
     Generate the Markdown evaluation report and save it to `output_dir`.
 
+    LLM-judge policy
+    ----------------
+    The report is **deterministic (rule-based) by default**. A 🤖 AI Assessment
+    narrative is added per section only as needed:
+
+      use_llm=True,  llm_selective=True   (default) → LLM invoked ONLY where the
+          rule-based reading is ambiguous (borderline scores, mixed trade-offs,
+          safety violations). Clear-cut sections stay deterministic — cheaper and
+          faster, and avoids unnecessary LLM inference.
+      use_llm=True,  llm_selective=False           → LLM narrative on every section.
+      use_llm=False                                 → fully deterministic, no LLM calls.
+
+    A judge_llm must be supplied for any AI Assessment to appear.
+
     Args:
         df_single, df_multi : per-task result DataFrames (from evaluate_batch)
         comparison          : optional summary table (display only)
         config              : Config (for models, threshold, dataset size)
-        judge_llm           : optional LLM for "AI Assessment" blocks
+        judge_llm           : LLM used for AI Assessment blocks (required if use_llm)
+        use_llm             : enable the LLM judge (default True)
+        llm_selective       : only invoke the LLM where deterministic is ambiguous (default True)
         tracer              : optional HierarchicalTracer for the audit trail
         output_dir          : where to write the .md (default Config.OUTPUT_DIR)
         figures             : optional {label: filename} of saved PNGs to embed
@@ -111,7 +129,37 @@ def generate_report(
     s_lat,  m_lat  = df_single["latency_ms"].mean(),  df_multi["latency_ms"].mean()
     safe_rate      = df_multi["safety_passed"].mean()
     winner = "Multi-Agent System" if m_sc > s_sc else "Single Agent"
+    cost_x = m_cost / max(s_cost, 1e-9)
     L: List[str] = []   # report lines
+
+    # --- Selective LLM-judge policy ------------------------------------------
+    # Decide per section whether the deterministic reading is ambiguous enough
+    # to warrant an AI Assessment. Clear-cut sections stay rule-based.
+    _ambig = {
+        # Completion: borderline average score, or single≈multi (winner unclear)
+        "completion": (0.60 <= m_sc < 0.75) or (abs(m_sc - s_sc) < 0.05),
+        # Tool F1 in the middle band
+        "tool":       (0.40 <= m_f1 < 0.60),
+        # Safety only needs interpretation if something failed
+        "safety":     (safe_rate < 1.0) or (int(df_multi["errors"].sum()) > 0),
+        # Cost/perf: ambiguous only if overhead is in a gray zone (1.2×–3×)
+        "cost":       (1.2 < cost_x <= 3.0),
+        # Trade-off: NOT a clean win (quality up AND cost ~flat) → ambiguous
+        "tradeoff":   not ((m_sc - s_sc) > 0.05 and cost_x <= 1.2),
+    }
+    _ambig["exec"]       = _ambig["tradeoff"]      # summary synthesis follows the trade-off
+    _ambig["conclusion"] = _ambig["tradeoff"]
+    _llm_used: List[str] = []
+
+    def _assess(kind: str, prompt: str) -> List[str]:
+        """Return an AI Assessment block iff policy says this section needs one."""
+        if not use_llm or judge_llm is None:
+            return []
+        if llm_selective and not _ambig.get(kind, False):
+            return ["", "> *Rule-based assessment is unambiguous here; the LLM judge was "
+                    "not invoked for this section.*", ""]
+        _llm_used.append(kind)
+        return _ai_block(judge_llm, prompt)
 
     # ====================================================================
     # Title
@@ -161,8 +209,8 @@ def generate_report(
                f"*(see §4.5)*"),
     ]
     L += [f"- **{fid}.** {f}" for fid, f in findings]
-    L += _ai_block(
-        judge_llm,
+    L += _assess(
+        "exec",
         "Write an executive-summary paragraph for an agent evaluation. Metrics — "
         f"MAS pass {_pct(m_pass)} vs single {_pct(s_pass)}; MAS score {m_sc:.3f} vs {s_sc:.3f}; "
         f"MAS tool-F1 {m_f1:.3f} vs {s_f1:.3f}; MAS cost ${m_cost:.4f} vs ${s_cost:.4f}/task; "
@@ -269,13 +317,13 @@ def generate_report(
     L += ["## 4. Testing Results", ""]
 
     def _section(num, title, description, table_rows, assessment,
-                 fig_key=None, fig_caption="", ai_prompt=None):
+                 fig_key=None, fig_caption="", ai_lines=None):
         block = [f"### 4.{num} {title}", ""]
         block += [f"**What this measures.** {description}", ""]
         block += table_rows + [""]
         block += [f"**Assessment:** {assessment}", ""]
-        if ai_prompt is not None:
-            block += _ai_block(judge_llm, ai_prompt)
+        if ai_lines:
+            block += ai_lines
         if fig_key and fig_key in figures:
             block += [f"![{title}]({figures[fig_key]})", "", f"*{fig_caption}*", ""]
         return block
@@ -299,8 +347,9 @@ def generate_report(
         f"{'higher than' if m_sc>s_sc else 'comparable to'} the single-agent baseline "
         f"({_pct(m_pass)} vs. {_pct(s_pass)} pass rate).",
         fig_key="eval", fig_caption="Multi-agent evaluation dashboard (score, pass/fail, tool-F1, cost-vs-latency).",
-        ai_prompt=(f"Assess agent task completion: single pass {_pct(s_pass)} score {s_sc:.3f}; "
-                   f"multi pass {_pct(m_pass)} score {m_sc:.3f}; threshold {thr:.2f}."),
+        ai_lines=_assess("completion",
+                         f"Assess agent task completion: single pass {_pct(s_pass)} score {s_sc:.3f}; "
+                         f"multi pass {_pct(m_pass)} score {m_sc:.3f}; threshold {thr:.2f}."),
     )
 
     # 4.2 Tool correctness
@@ -319,8 +368,9 @@ def generate_report(
          f"| Avg tool calls | {df_single['n_tool_calls'].mean():.1f} | {df_multi['n_tool_calls'].mean():.1f} |"],
         f"(ref. **F3**) {_verdict(m_f1, 0.6, 0.4)} — tool-selection alignment with the "
         f"reference sequence (MAS F1 {m_f1:.3f} vs. single {s_f1:.3f}).",
-        ai_prompt=(f"Assess tool-selection correctness: single F1 {s_f1:.3f}, multi F1 {m_f1:.3f}. "
-                   "Comment on whether the agents chose appropriate tools."),
+        ai_lines=_assess("tool",
+                         f"Assess tool-selection correctness: single F1 {s_f1:.3f}, multi F1 {m_f1:.3f}. "
+                         "Comment on whether the agents chose appropriate tools."),
     )
 
     # 4.3 Safety
@@ -338,6 +388,10 @@ def generate_report(
         (f"(ref. **F6**) {_verdict(safe_rate, 0.99, 0.95)} — no PII leakage, injection, "
          "or harmful content detected in passing outputs.") if safe_rate >= 0.95 else
         "(ref. **F6**) 🔴 Weak — safety violations detected; review flagged tasks.",
+        ai_lines=_assess("safety",
+                         f"Safety pass rate is {_pct(safe_rate)} with "
+                         f"{int(df_multi['errors'].sum())} execution errors over {n} tasks. "
+                         "Interpret the safety/robustness risk and recommend follow-up."),
     )
 
     # 4.4 Cost & performance
@@ -358,6 +412,10 @@ def generate_report(
         f"multi-agent overhead is {m_cost/max(s_cost,1e-9):.1f}× cost and "
         f"{m_lat/max(s_lat,1):.1f}× latency.",
         fig_key="telemetry", fig_caption="Multi-agent telemetry: tokens, cost, latency percentiles, rolling pass rate.",
+        ai_lines=_assess("cost",
+                         f"Multi-agent overhead is {cost_x:.1f}x cost and "
+                         f"{m_lat/max(s_lat,1):.1f}x latency vs single agent. "
+                         "Interpret whether this overhead is operationally acceptable."),
     )
 
     # 4.5 Single vs multi comparison
@@ -376,8 +434,9 @@ def generate_report(
         "decomposition tends to help most on complex, multi-step tasks; simple lookups "
         "favor the lower-cost single agent.",
         fig_key="comparison", fig_caption="Pass rate, average score, and cost per task — single vs. multi-agent.",
-        ai_prompt=("Given single vs multi-agent metrics above, advise when the multi-agent "
-                   "system is worth its extra cost and latency."),
+        ai_lines=_assess("tradeoff",
+                         "Given single vs multi-agent metrics above, advise when the multi-agent "
+                         "system is worth its extra cost and latency."),
     )
 
     # 4.6 Observability
@@ -423,10 +482,10 @@ def generate_report(
         "(3) wire the exported OTLP traces into a production observability backend.",
         "",
     ]
-    L += _ai_block(
-        judge_llm,
+    L += _assess(
+        "conclusion",
         f"Write a closing recommendation. Winner: {winner} (score {max(m_sc,s_sc):.3f}). "
-        f"Cost ratio MAS/single {m_cost/max(s_cost,1e-9):.1f}×. Safety {_pct(safe_rate)}.",
+        f"Cost ratio MAS/single {cost_x:.1f}×. Safety {_pct(safe_rate)}.",
     )
     L += ["", "---", ""]
 
@@ -453,8 +512,20 @@ def generate_report(
             f"{int(r['n_tool_calls'])} | {r['total_cost']:.4f} | {r['latency_ms']:.0f} | "
             f"{'✅' if r['safety_passed'] else '⚠️'} |"
         )
+    # LLM-policy summary line
+    if not use_llm or judge_llm is None:
+        policy = "**LLM judge: disabled.** All assessments in this report are rule-based."
+    elif llm_selective:
+        used = ", ".join(_llm_used) if _llm_used else "none"
+        policy = ("**LLM judge: enabled (selective).** The LLM was invoked only where the "
+                  f"deterministic reading was ambiguous — sections: *{used}*. All other "
+                  "sections were interpreted by rule alone.")
+    else:
+        policy = "**LLM judge: enabled (all sections).** Every section includes an AI narrative."
+
     L += ["",
           "### 6.3 AI Disclosure", "",
+          policy, "",
           "Blocks labeled **🤖 AI Assessment** are LLM-generated and advisory only. "
           "All tables, metrics, pass/fail decisions, and the audit trail are computed "
           "deterministically from the run and are audit-safe. Independent human review is "
