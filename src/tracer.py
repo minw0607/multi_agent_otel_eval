@@ -76,6 +76,7 @@ class ExecutionTrace:
     total_cost: float = 0.0
     latency_ms: float = 0.0
     retries: int      = 0
+    tokens_source: str = "estimated"   # "api" when counts come from real usage metadata
 
     def finish(self):
         self.end_time  = time.time()

@@ -137,6 +137,24 @@ Standard attributes captured per span: `gen_ai.system`, `gen_ai.request.model`,
 `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.agent.name`,
 `gen_ai.tool.name`, `gen_ai.usage.cost_usd`, plus custom evaluation extensions.
 
+### Two tracing modes
+
+| Mode | What it does | When |
+|---|---|---|
+| **Local (default)** | `HierarchicalTracer` records the span tree to JSONL + the offline trace-tree chart — zero extra dependencies | Always on |
+| **Real OTel → Phoenix** | `setup_phoenix()` registers the **OpenTelemetry SDK** and **auto-instruments LangChain/LangGraph** (OpenInference), streaming live spans to [Arize Phoenix](https://phoenix.arize.com) or any OTLP backend (Datadog, Jaeger, Grafana Tempo, Langfuse) | One optional call |
+
+```python
+from src import setup_phoenix
+setup_phoenix()                                  # local Phoenix UI at :6006
+setup_phoenix(endpoint="http://collector:4317")  # or any OTLP collector
+```
+
+**Real token & cost.** Token counts come from **actual API usage metadata**
+(LangChain usage callbacks) whenever the provider returns it, falling back to a
+tiktoken estimate otherwise — the `tokens_source` field records which was used, so
+cost figures are honest rather than guessed.
+
 ---
 
 ## Evaluation Metrics
@@ -346,7 +364,8 @@ multi_agent_otel_eval/
 │
 ├── src/                            ← Importable Python modules
 │   ├── config.py                   ← Provider-agnostic LLM factory, reads from .env
-│   ├── tracer.py                   ← OTel spans (HierarchicalTracer) + ExecutionTrace
+│   ├── tracer.py                   ← Local OTel-shaped spans (HierarchicalTracer) + ExecutionTrace
+│   ├── otel.py                     ← Real OpenTelemetry → Phoenix + real token/cost callbacks
 │   ├── monitors.py                 ← CostTracker + HealthMonitor (rolling window)
 │   ├── safety.py                   ← PII, injection, harmful-content, budget checks
 │   ├── tools.py                    ← Hybrid real/mock web-navigation tools

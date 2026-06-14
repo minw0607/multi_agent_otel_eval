@@ -401,7 +401,12 @@ def generate_report(
         "token usage (agent and judge/validator tracked separately) using the rate table "
         "in `Config`; latency is wall-clock per task. The MAS runs 3–4 LLM roles per "
         "task vs. 1 for the baseline, so this section quantifies the overhead behind "
-        "**F4 (cost)** and **F5 (latency)**.",
+        "**F4 (cost)** and **F5 (latency)**. "
+        + (f"Token counts are sourced from **real API usage** for "
+           f"{(df_multi['tokens_source'] == 'api').mean()*100:.0f}% of multi-agent tasks "
+           "(remainder estimated via tiktoken)."
+           if "tokens_source" in df_multi.columns else
+           "Token counts are estimated via tiktoken where the provider does not return usage."),
         ["| Metric | Single Agent | Multi-Agent |",
          "|---|---|---|",
          f"| Avg cost / task | ${s_cost:.4f} | ${m_cost:.4f} |",

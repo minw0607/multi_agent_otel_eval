@@ -13,3 +13,11 @@ beautifulsoup4>=4.12.0
 tiktoken>=0.7.0
 # Optional — enables real web search
 # tavily-python>=0.3.0
+
+# Optional — real OpenTelemetry observability (live spans → Arize Phoenix / any OTLP backend)
+# Without these, the framework falls back to the local HierarchicalTracer.
+# arize-phoenix>=4.0.0
+# openinference-instrumentation-langchain>=0.1.0
+# opentelemetry-sdk>=1.24.0
+# opentelemetry-exporter-otlp>=1.24.0
+# Note: real token/cost accounting needs langchain-core>=0.3.0 (UsageMetadataCallbackHandler)

@@ -97,6 +97,7 @@ def evaluate_batch(
             "agent_tokens":   trace.agent_input_tokens + trace.agent_output_tokens,
             "judge_tokens":   trace.judge_input_tokens + trace.judge_output_tokens,
             "total_cost":     trace.total_cost,
+            "tokens_source":  trace.tokens_source,
             "safety_passed":  SafetyValidator.is_safe(safety),
             "errors":         len(trace.errors),
         })

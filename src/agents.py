@@ -20,6 +20,7 @@ from langgraph.prebuilt import create_react_agent
 from .config import Config
 from .tools import ALL_TOOLS
 from .tracer import TracingManager, HierarchicalTracer, SPAN_NAMES, SpanStatus
+from .otel import make_usage_callback, usage_from_callback
 
 
 AGENT_SYSTEM_PROMPT = """You are an AI agent completing real-world web navigation tasks.
@@ -112,10 +113,13 @@ def run_agent(task: Mind2WebTask, agent, tracing_manager: TracingManager,
         )
 
     try:
+        usage_cb = make_usage_callback()
         run_config = {
             "configurable": {"thread_id": f"task_{task.idx}"},
             "recursion_limit": 50,
         }
+        if usage_cb is not None:
+            run_config["callbacks"] = [usage_cb]
         agent_span = hier_tracer.start_span("agent.react.execute") if hier_tracer else None
         result      = agent.invoke({"messages": [HumanMessage(content=task_input)]}, config=run_config)
         agent_output = ""
@@ -137,15 +141,21 @@ def run_agent(task: Mind2WebTask, agent, tracing_manager: TracingManager,
         if hier_tracer is not None:
             hier_tracer.end_span(agent_span, attributes={"tool_calls": len(tool_calls)})
 
-        # Token counting
-        try:
-            import tiktoken
-            enc = tiktoken.encoding_for_model("gpt-4")
-            in_tok  = len(enc.encode(AGENT_SYSTEM_PROMPT + task_input))
-            out_tok = len(enc.encode(agent_output))
-        except Exception:
-            in_tok  = int(len((AGENT_SYSTEM_PROMPT + task_input).split()) * 1.3)
-            out_tok = int(len(agent_output.split()) * 1.3)
+        # Token counting — prefer REAL usage from the API; fall back to estimate
+        real = usage_from_callback(usage_cb)
+        if real is not None:
+            in_tok, out_tok = real
+            trace.tokens_source = "api"
+        else:
+            try:
+                import tiktoken
+                enc = tiktoken.encoding_for_model("gpt-4")
+                in_tok  = len(enc.encode(AGENT_SYSTEM_PROMPT + task_input))
+                out_tok = len(enc.encode(agent_output))
+            except Exception:
+                in_tok  = int(len((AGENT_SYSTEM_PROMPT + task_input).split()) * 1.3)
+                out_tok = int(len(agent_output.split()) * 1.3)
+            trace.tokens_source = "estimated"
 
         agent_model = cfg.AGENT_MODEL
         trace.agent_input_tokens  = in_tok
@@ -279,7 +289,15 @@ def run_multi_agent(task: Mind2WebTask, agents: Dict,
         return ((in_tok / 1e6) * cfg.get_cost_rate(model, "input") +
                 (out_tok / 1e6) * cfg.get_cost_rate(model, "output"))
 
+    def _tokens(cb, est_in_text, est_out_text):
+        """Real usage from the callback if available, else a tiktoken estimate."""
+        real = usage_from_callback(cb)
+        if real is not None:
+            return real[0], real[1], "api"
+        return _count_tokens(est_in_text), _count_tokens(est_out_text), "estimated"
+
     per_agent: Dict[str, Dict] = {}
+    sources: List[str] = []
 
     try:
         # ---- Supervisor: route start → planner ----
@@ -292,10 +310,13 @@ def run_multi_agent(task: Mind2WebTask, agents: Dict,
         # ---- Planner: pure reasoning, no tools ----
         sp = tracer.start_span(SPAN_NAMES["AGENT_PLANNER"])
         p_user = f"Task: {task.confirmed_task}\nWebsite: {task.website}\nDomain: {task.domain}"
+        p_cb = make_usage_callback()
         plan = agents["planner"].invoke(
-            [SystemMessage(content=_PLANNER_PROMPT), HumanMessage(content=p_user)]
+            [SystemMessage(content=_PLANNER_PROMPT), HumanMessage(content=p_user)],
+            config={"callbacks": [p_cb]} if p_cb else None,
         ).content.strip()
-        p_in, p_out = _count_tokens(_PLANNER_PROMPT + p_user), _count_tokens(plan)
+        p_in, p_out, p_src = _tokens(p_cb, _PLANNER_PROMPT + p_user, plan)
+        sources.append(p_src)
         p_cost = _cost(models["planner"], p_in, p_out)
         per_agent["planner"] = {"cost": p_cost, "tokens": p_in + p_out}
         tracer.end_span(sp, attributes={
@@ -308,9 +329,13 @@ def run_multi_agent(task: Mind2WebTask, agents: Dict,
         # ---- Navigator: executes plan with tools ----
         sn = tracer.start_span(SPAN_NAMES["AGENT_NAVIGATOR"])
         n_user = f"Task: {task.confirmed_task}\nWebsite: {task.website}\n\nPlan:\n{plan}\n\nExecute it."
+        n_cb = make_usage_callback()
+        nav_run_config = {"configurable": {"thread_id": f"nav_{task.idx}"}, "recursion_limit": 50}
+        if n_cb is not None:
+            nav_run_config["callbacks"] = [n_cb]
         nav_result = agents["navigator_agent"].invoke(
             {"messages": [HumanMessage(content=n_user)]},
-            config={"configurable": {"thread_id": f"nav_{task.idx}"}, "recursion_limit": 50},
+            config=nav_run_config,
         )
         nav_output, nav_tools = "", []
         for msg in nav_result["messages"]:
@@ -323,7 +348,8 @@ def run_multi_agent(task: Mind2WebTask, agents: Dict,
                     ts = tracer.start_span(SPAN_NAMES["TOOL_CALL"],
                                            attributes={"gen_ai.tool.name": name})
                     tracer.end_span(ts)
-        n_in, n_out = _count_tokens(_NAVIGATOR_PROMPT + n_user), _count_tokens(nav_output)
+        n_in, n_out, n_src = _tokens(n_cb, _NAVIGATOR_PROMPT + n_user, nav_output)
+        sources.append(n_src)
         n_cost = _cost(models["navigator"], n_in, n_out)
         per_agent["navigator"] = {"cost": n_cost, "tokens": n_in + n_out}
         tracer.end_span(sn, attributes={
@@ -337,15 +363,18 @@ def run_multi_agent(task: Mind2WebTask, agents: Dict,
         sv = tracer.start_span(SPAN_NAMES["AGENT_VALIDATOR"])
         v_user = (f"Task: {task.confirmed_task}\n\nPlan:\n{plan[:500]}\n\n"
                   f"Navigation Output:\n{nav_output[:1500]}\n\nProvide your assessment.")
+        v_cb = make_usage_callback()
         validation = agents["validator"].invoke(
-            [SystemMessage(content=_VALIDATOR_PROMPT), HumanMessage(content=v_user)]
+            [SystemMessage(content=_VALIDATOR_PROMPT), HumanMessage(content=v_user)],
+            config={"callbacks": [v_cb]} if v_cb else None,
         ).content.strip()
         verdict = {}
         for line in validation.split("\n"):
             for key in ("COMPLETION", "TOOL_USAGE", "QUALITY", "CONFIDENCE"):
                 if line.strip().upper().startswith(key):
                     verdict[key] = line.split(":", 1)[1].strip()
-        v_in, v_out = _count_tokens(_VALIDATOR_PROMPT + v_user), _count_tokens(validation)
+        v_in, v_out, v_src = _tokens(v_cb, _VALIDATOR_PROMPT + v_user, validation)
+        sources.append(v_src)
         v_cost = _cost(models["validator"], v_in, v_out)
         per_agent["validator"] = {"cost": v_cost, "tokens": v_in + v_out}
         tracer.end_span(sv, attributes={
@@ -368,6 +397,8 @@ def run_multi_agent(task: Mind2WebTask, agents: Dict,
         trace.agent_cost = per_agent["planner"]["cost"] + per_agent["navigator"]["cost"]
         trace.judge_cost = per_agent["validator"]["cost"]
         trace.total_cost = total_cost
+        trace.tokens_source = "api" if all(s == "api" for s in sources) else \
+                              "mixed" if "api" in sources else "estimated"
         trace.decision_points = [{"agent": k, **v} for k, v in per_agent.items()]
         trace.reasoning_steps = [
             f"Planner: {p_in + p_out} tok / ${p_cost:.5f}",
