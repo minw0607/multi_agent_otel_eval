@@ -57,13 +57,15 @@ substantially, at a measurable cost/latency premium:
 
 ![Single vs Multi comparison](docs/baseline_vs_multi.png)
 
-| Metric | Single Agent | Multi-Agent |
-|---|---|---|
-| Pass rate | 70% | **90%** |
-| Avg task score | 0.724 | **0.816** |
-| Tool F1 | 0.383 | **0.432** |
-| Avg cost / task | $0.0330 | $0.0386 (**1.2×**) |
-| Median latency | 11.3 s | 19.7 s |
+| Metric | Single Agent | Multi-Agent | Rating |
+|---|---|---|---|
+| Pass rate | 60% | **100%** | 🟢 High |
+| Avg task score | 0.697 | **0.809** | 🟢 High |
+| Tool F1 | 0.399 | **0.462** | 🟡 Medium |
+| Avg cost / task | $0.0346 | $0.0414 (**1.2×**) | 🟢 High |
+| Median latency | 8.3 s | 19.5 s | 🟡 Medium |
+| Safety | 100% | 100% | 🟢 High |
+| **Overall** | | | **🟢 High** |
 
 *(Cost reflects real API usage — counting every ReAct round-trip, not just the final
 output. Latency is the median, robust to occasional API stalls.)*
