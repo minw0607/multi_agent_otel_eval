@@ -48,21 +48,25 @@ notebook reads as a clean narrative of the observability-and-evaluation workflow
 
 ## Sample Results
 
-A 10-task run (single agent vs. multi-agent system) — your numbers will vary by model
-and sample, but the pattern is representative.
+A 10-task run (single agent vs. multi-agent system) with **real API token/cost
+accounting** — your numbers will vary by model and sample, but the pattern is
+representative.
 
 **Single-Agent vs. Multi-Agent System** — the multi-agent system lifted the pass rate
-with negligible extra cost:
+substantially, at a measurable cost/latency premium:
 
 ![Single vs Multi comparison](docs/baseline_vs_multi.png)
 
-| Metric | Single Agent | Multi-Agent | 
+| Metric | Single Agent | Multi-Agent |
 |---|---|---|
-| Pass rate | 60–70% | **90%** |
-| Avg task score | ~0.72 | **~0.80** |
-| Tool F1 | ~0.39 | **~0.51** |
-| Avg cost / task | ~$0.010 | ~$0.010 |
-| Avg latency | ~15 s | ~20 s |
+| Pass rate | 60% | **100%** |
+| Avg task score | 0.708 | **0.805** |
+| Tool F1 | 0.368 | **0.427** |
+| Avg cost / task | $0.0296 | $0.0406 (**1.4×**) |
+| Median latency | 9.1 s | 16.9 s |
+
+*(Cost reflects real API usage — counting every ReAct round-trip, not just the final
+output. Latency is the median, robust to occasional API stalls.)*
 
 **OpenTelemetry trace tree** — every task is a hierarchical span tree
 (`task.execute → planner → navigator → tool.execute → validator`) with per-agent cost,
@@ -75,7 +79,8 @@ exported to OTLP JSON:
 ![Evaluation dashboard](docs/mas_eval_dashboard.png)
 
 > 📄 These visuals come straight from the framework. See the full **[sample evaluation
-> report →](docs/sample_evaluation_report.md)** for the complete write-up.
+> report →](docs/sample_evaluation_report.md)** (Markdown) or the **[HTML executive
+> summary →](docs/sample_executive_summary.html)** for the complete write-up.
 
 ---
 

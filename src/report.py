@@ -15,7 +15,9 @@ narrative is added and clearly labeled "🤖 AI Assessment" with a disclosure no
 so deterministic (audit-safe) findings are never confused with LLM inference.
 """
 
+import base64
 from datetime import datetime
+from html import escape
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -126,7 +128,8 @@ def generate_report(
     s_sc,   m_sc   = df_single["task_score"].mean(),  df_multi["task_score"].mean()
     s_f1,   m_f1   = df_single["tool_f1"].mean(),     df_multi["tool_f1"].mean()
     s_cost, m_cost = df_single["total_cost"].mean(),  df_multi["total_cost"].mean()
-    s_lat,  m_lat  = df_single["latency_ms"].mean(),  df_multi["latency_ms"].mean()
+    # Median latency — robust to the occasional API stall that inflates the mean.
+    s_lat,  m_lat  = df_single["latency_ms"].median(), df_multi["latency_ms"].median()
     safe_rate      = df_multi["safety_passed"].mean()
     winner = "Multi-Agent System" if m_sc > s_sc else "Single Agent"
     cost_x = m_cost / max(s_cost, 1e-9)
@@ -201,7 +204,7 @@ def generate_report(
                f"*(see §4.2)*"),
         ("F4", f"**Cost:** MAS **${m_cost:.4f}/task** vs. **${s_cost:.4f}/task** "
                f"({m_cost/max(s_cost,1e-9):.1f}× the single-agent cost). *(see §4.4)*"),
-        ("F5", f"**Latency:** MAS **{m_lat:.0f} ms/task** vs. **{s_lat:.0f} ms/task**. "
+        ("F5", f"**Latency (median):** MAS **{m_lat:.0f} ms/task** vs. **{s_lat:.0f} ms/task**. "
                f"*(see §4.4)*"),
         ("F6", f"**Safety:** **{_pct(safe_rate)}** of MAS outputs passed all safety checks "
                f"(PII, injection, harmful content). *(see §4.3)*"),
@@ -411,7 +414,7 @@ def generate_report(
          "|---|---|---|",
          f"| Avg cost / task | ${s_cost:.4f} | ${m_cost:.4f} |",
          f"| Total cost ({n} tasks) | ${df_single['total_cost'].sum():.4f} | ${df_multi['total_cost'].sum():.4f} |",
-         f"| Avg latency | {s_lat:.0f} ms | {m_lat:.0f} ms |",
+         f"| Median latency | {s_lat:.0f} ms | {m_lat:.0f} ms |",
          f"| P95 latency | {df_single['latency_ms'].quantile(0.95):.0f} ms | {df_multi['latency_ms'].quantile(0.95):.0f} ms |"],
         f"(ref. **F4, F5**) {_verdict(m_cost, s_cost*1.5, s_cost*3, higher_better=False)} — "
         f"multi-agent overhead is {m_cost/max(s_cost,1e-9):.1f}× cost and "
@@ -543,4 +546,191 @@ def generate_report(
     report = "\n".join(L)
     path = out / f"evaluation_report_{ts}.md"
     path.write_text(report)
+    return path
+
+
+# ===========================================================================
+# HTML Executive Summary (standalone, self-contained one-pager)
+# ===========================================================================
+
+def executive_summary_html(
+    df_single: pd.DataFrame,
+    df_multi: pd.DataFrame,
+    comparison: pd.DataFrame = None,
+    *,
+    config: Config = None,
+    output_dir: Optional[Path] = None,
+    chart_path: Optional[Path] = None,
+    embed_chart: bool = True,
+    ai_narrative: Optional[str] = None,
+) -> Path:
+    """
+    Render the Executive Summary as a styled, self-contained HTML page.
+
+    Deterministic by default. Pass `ai_narrative` (a string from your judge LLM)
+    to include an "🤖 AI Assessment" block. Latency uses the **median** (robust to
+    the occasional API stall that inflates the mean). The single-vs-multi chart is
+    base64-embedded so the file is fully portable.
+
+    Returns the path to the written .html (also viewable in a notebook via
+    `IPython.display.HTML(path.read_text())`).
+    """
+    cfg = config or Config
+    out = Path(output_dir) if output_dir else cfg.OUTPUT_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    n = len(df_multi)
+    s_pass, m_pass = df_single["task_passed"].mean(), df_multi["task_passed"].mean()
+    s_sc,   m_sc   = df_single["task_score"].mean(),  df_multi["task_score"].mean()
+    s_f1,   m_f1   = df_single["tool_f1"].mean(),     df_multi["tool_f1"].mean()
+    s_cost, m_cost = df_single["total_cost"].mean(),  df_multi["total_cost"].mean()
+    s_lat,  m_lat  = df_single["latency_ms"].median(), df_multi["latency_ms"].median()
+    safe_rate = df_multi["safety_passed"].mean()
+    winner = "Multi-Agent System" if m_sc > s_sc else "Single Agent"
+    cost_x = m_cost / max(s_cost, 1e-9)
+    real = "tokens_source" in df_multi.columns and (df_multi["tokens_source"] == "api").any()
+
+    def _delta_cell(s, m, fmt, higher_better=True):
+        d = m - s
+        good = (d >= 0) == higher_better
+        arrow = "▲" if d > 0 else ("▼" if d < 0 else "■")
+        cls = "up" if good else "down"
+        return (f"<td>{fmt.format(s)}</td><td><strong>{fmt.format(m)}</strong></td>"
+                f"<td class='{cls}'>{arrow} {fmt.format(abs(d))}</td>")
+
+    rows = [
+        ("Pass rate",       s_pass, m_pass, "{:.0%}",  True),
+        ("Avg task score",  s_sc,   m_sc,   "{:.3f}",  True),
+        ("Tool F1",         s_f1,   m_f1,   "{:.3f}",  True),
+        ("Avg cost / task", s_cost, m_cost, "${:.4f}", False),
+        ("Median latency",  s_lat/1000, m_lat/1000, "{:.1f}s", False),
+    ]
+    table_rows = "".join(
+        f"<tr><td class='metric'>{label}</td>{_delta_cell(s, m, fmt, hb)}</tr>"
+        for label, s, m, fmt, hb in rows
+    )
+
+    findings = [
+        ("F1", f"Task completion: MAS pass rate <b>{m_pass:.0%}</b> vs. single <b>{s_pass:.0%}</b> "
+               f"({'+' if m_pass>=s_pass else ''}{(m_pass-s_pass)*100:.0f} pp)."),
+        ("F2", f"Quality: MAS avg score <b>{m_sc:.3f}</b> vs. <b>{s_sc:.3f}</b>."),
+        ("F3", f"Tool correctness: MAS tool-F1 <b>{m_f1:.3f}</b> vs. <b>{s_f1:.3f}</b>."),
+        ("F4", f"Cost: MAS <b>${m_cost:.4f}</b>/task vs. <b>${s_cost:.4f}</b>/task "
+               f"({cost_x:.1f}× the single-agent cost)."),
+        ("F5", f"Latency (median): MAS <b>{m_lat/1000:.1f}s</b> vs. <b>{s_lat/1000:.1f}s</b>."),
+        ("F6", f"Safety: <b>{safe_rate:.0%}</b> of MAS outputs passed all safety checks."),
+        ("F7", f"Overall: the <b>{winner}</b> delivered higher task quality on this sample."),
+    ]
+    findings_html = "".join(
+        f"<li><span class='fid'>{fid}</span>{txt}</li>" for fid, txt in findings
+    )
+
+    # Embed the comparison chart as base64 (portable)
+    chart_html = ""
+    if embed_chart:
+        cp = Path(chart_path) if chart_path else (out / "baseline_vs_multi.png")
+        if cp.exists():
+            b64 = base64.b64encode(cp.read_bytes()).decode()
+            chart_html = (f"<img class='chart' alt='Single vs Multi comparison' "
+                          f"src='data:image/png;base64,{b64}'/>")
+
+    ai_html = ""
+    if ai_narrative:
+        ai_html = (
+            "<div class='ai'><div class='ai-tag'>🤖 AI Assessment</div>"
+            f"<p>{escape(ai_narrative)}</p>"
+            "<div class='ai-note'>LLM-generated · advisory only · requires human review</div></div>"
+        )
+
+    rec = ("Adopt the multi-agent system for complex, multi-step tasks; keep the single "
+           "agent as a low-cost default for simple lookups."
+           if m_sc > s_sc else
+           "The single agent suffices for this task profile; reserve the multi-agent "
+           "system for harder, multi-step workloads.")
+
+    token_badge = ("<span class='badge ok'>real API usage</span>" if real
+                   else "<span class='badge warn'>estimated tokens</span>")
+
+    html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Executive Summary — Agent Evaluation</title>
+<style>
+  :root {{ --navy:#1E3A5F; --teal:#2A9D8F; --purple:#8B5CF6; --red:#EF4444;
+          --slate:#64748B; --bg:#F8FAFC; --line:#E2E8F0; }}
+  * {{ box-sizing:border-box; }}
+  body {{ font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         color:#0f172a; background:var(--bg); margin:0; padding:32px; line-height:1.5; }}
+  .card {{ max-width:880px; margin:0 auto; background:#fff; border:1px solid var(--line);
+          border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }}
+  .hd {{ background:linear-gradient(135deg,var(--navy),#2c5282); color:#fff; padding:24px 28px; }}
+  .hd h1 {{ margin:0 0 4px; font-size:22px; }}
+  .hd .sub {{ opacity:.9; font-size:13px; }}
+  .meta {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; font-size:12px; }}
+  .badge {{ background:rgba(255,255,255,.18); padding:3px 9px; border-radius:999px; }}
+  .badge.ok {{ background:rgba(16,185,129,.9); }} .badge.warn {{ background:rgba(245,158,11,.95); }}
+  .body {{ padding:24px 28px; }}
+  h2 {{ font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--slate);
+        margin:26px 0 12px; }}
+  .lede {{ font-size:15px; color:#334155; }}
+  ul.findings {{ list-style:none; padding:0; margin:0; }}
+  ul.findings li {{ padding:9px 0; border-bottom:1px dashed var(--line); font-size:14px; }}
+  ul.findings li:last-child {{ border-bottom:none; }}
+  .fid {{ display:inline-block; min-width:34px; font-weight:700; color:var(--teal); }}
+  table {{ width:100%; border-collapse:collapse; font-size:14px; margin-top:6px; }}
+  th,td {{ text-align:right; padding:9px 10px; border-bottom:1px solid var(--line); }}
+  th {{ color:var(--slate); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }}
+  td.metric {{ text-align:left; font-weight:600; color:var(--navy); }}
+  td.up {{ color:var(--teal); font-weight:600; }} td.down {{ color:var(--red); font-weight:600; }}
+  .chart {{ width:100%; border:1px solid var(--line); border-radius:10px; margin-top:8px; }}
+  .rec {{ background:#ecfdf5; border-left:4px solid var(--teal); padding:12px 16px;
+          border-radius:8px; font-size:14px; }}
+  .ai {{ background:#faf5ff; border-left:4px solid var(--purple); padding:12px 16px;
+        border-radius:8px; margin-top:14px; }}
+  .ai-tag {{ font-weight:700; color:var(--purple); font-size:13px; margin-bottom:4px; }}
+  .ai-note {{ font-size:11px; color:var(--slate); margin-top:6px; }}
+  .ft {{ padding:16px 28px; border-top:1px solid var(--line); font-size:11px; color:var(--slate); }}
+</style></head>
+<body><div class="card">
+  <div class="hd">
+    <h1>Executive Summary — Agent Evaluation</h1>
+    <div class="sub">Multi-Agent Observability &amp; Evaluation Framework · Mind2Web benchmark</div>
+    <div class="meta">
+      <span class="badge">{datetime.now():%Y-%m-%d %H:%M}</span>
+      <span class="badge">Agent: {escape(cfg.AGENT_MODEL)}</span>
+      <span class="badge">Judge: {escape(cfg.JUDGE_MODEL)}</span>
+      <span class="badge">{n} tasks / arch</span>
+      <span class="badge">threshold {cfg.EVAL_PASS_THRESHOLD:.2f}</span>
+      {token_badge}
+    </div>
+  </div>
+  <div class="body">
+    <p class="lede">A single-agent baseline and a multi-agent system (Supervisor → Planner →
+      Navigator → Validator) were evaluated on {n} Mind2Web tasks across task completion,
+      tool selection, safety, cost, and latency, with full OpenTelemetry tracing.</p>
+
+    <h2>Key Findings</h2>
+    <ul class="findings">{findings_html}</ul>
+
+    <h2>Single-Agent vs. Multi-Agent</h2>
+    <table>
+      <tr><th>Metric</th><th>Single</th><th>Multi-Agent</th><th>Δ</th></tr>
+      {table_rows}
+    </table>
+    {chart_html}
+
+    <h2>Recommendation</h2>
+    <div class="rec">{rec}</div>
+    {ai_html}
+  </div>
+  <div class="ft">
+    Metrics, tables, and pass/fail decisions are computed deterministically and are
+    audit-safe. Latency shown as median (robust to transient API stalls). Blocks marked
+    🤖 AI Assessment are LLM-generated and advisory only.
+  </div>
+</div></body></html>"""
+
+    path = out / f"executive_summary_{ts}.html"
+    path.write_text(html)
     return path
