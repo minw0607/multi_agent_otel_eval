@@ -4,7 +4,7 @@
 
 **A provider-agnostic GenAI observability & evaluation framework benchmarked on Mind2Web**
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/minw0607/multi_agent_otel_eval/blob/main/demo_notebook.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/minw0607/multi_agent_otel_eval/blob/main/agentic_otel_demo_notebook.ipynb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-GenAI%20SemConv-425CC7?logo=opentelemetry)](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
@@ -331,7 +331,7 @@ See [docs/provider-setup.md](docs/provider-setup.md) for step-by-step instructio
 #### 3. Run the demo notebook
 
 ```bash
-jupyter notebook demo_notebook.ipynb
+jupyter notebook agentic_otel_demo_notebook.ipynb
 ```
 
 Run cells in order. The Mind2Web dataset streams from HuggingFace on first run and
@@ -369,7 +369,7 @@ multi_agent_otel_eval/
 ├── .gitignore
 ├── LICENSE
 │
-├── demo_notebook.ipynb             ← ★ Start here — coding-light, all heavy lifting in src/
+├── agentic_otel_demo_notebook.ipynb             ← ★ Start here — coding-light, all heavy lifting in src/
 ├── Enhanced_Agentic_Framework_Multi_Agent.ipynb   ← Original monolithic research notebook
 │
 ├── src/                            ← Importable Python modules
