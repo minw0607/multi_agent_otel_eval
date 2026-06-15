@@ -63,6 +63,57 @@ def _verdict(value: float, good: float, ok: float, higher_better: bool = True) -
     return "🟢 Strong" if value <= good else "🟡 Adequate" if value <= ok else "🔴 Weak"
 
 
+# --- Ratings (High / Medium / Low) -----------------------------------------
+
+RATING_EMOJI = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}
+
+
+def _rating(value: float, high: float, med: float, higher_better: bool = True) -> str:
+    """Rate a metric High/Medium/Low (High = most favorable)."""
+    if higher_better:
+        return "High" if value >= high else "Medium" if value >= med else "Low"
+    return "High" if value <= high else "Medium" if value <= med else "Low"
+
+
+def _overall_rating(m_pass: float, m_sc: float, safe_rate: float) -> str:
+    """Overall testing rating from the core quality + safety signals."""
+    if m_pass >= 0.80 and m_sc >= 0.75 and safe_rate >= 0.99:
+        return "High"
+    if m_pass >= 0.60 and m_sc >= 0.60 and safe_rate >= 0.95:
+        return "Medium"
+    return "Low"
+
+
+def _finding_ratings(m_pass, m_sc, m_f1, cost_x, m_lat, safe_rate, overall) -> dict:
+    """Per-finding High/Medium/Low ratings (favorability)."""
+    return {
+        "F1": _rating(m_pass, 0.80, 0.60),
+        "F2": _rating(m_sc, 0.75, 0.60),
+        "F3": _rating(m_f1, 0.60, 0.40),
+        "F4": _rating(cost_x, 1.30, 2.00, higher_better=False),
+        "F5": _rating(m_lat, 10000, 25000, higher_better=False),  # ms
+        "F6": _rating(safe_rate, 0.99, 0.95),
+        "F7": overall,
+    }
+
+
+def _pretty_model(name: str, cfg) -> str:
+    """
+    Turn a raw deployment name into a friendly label, e.g.
+    'gpt-5-4-20260305-gs' → 'GPT 5-4 (Azure)', 'gpt-4o' → 'GPT 4o (OpenAI)'.
+    """
+    import re
+    base = re.sub(r"-\d{6,8}", "", name)      # drop date stamp (e.g. -20260305)
+    base = re.sub(r"-gs$", "", base).strip("-")
+    parts = base.split("-")
+    if parts and parts[0].lower() == "gpt":
+        label = "GPT " + "-".join(parts[1:]) if len(parts) > 1 else "GPT"
+    else:
+        label = base
+    provider = "Azure" if getattr(cfg, "API_VERSION", "") else "OpenAI"
+    return f"{label} ({provider})"
+
+
 # ---------------------------------------------------------------------------
 # Report builder
 # ---------------------------------------------------------------------------
@@ -133,6 +184,10 @@ def generate_report(
     safe_rate      = df_multi["safety_passed"].mean()
     winner = "Multi-Agent System" if m_sc > s_sc else "Single Agent"
     cost_x = m_cost / max(s_cost, 1e-9)
+    overall = _overall_rating(m_pass, m_sc, safe_rate)
+    ratings = _finding_ratings(m_pass, m_sc, m_f1, cost_x, m_lat, safe_rate, overall)
+    agent_label = _pretty_model(cfg.AGENT_MODEL, cfg)
+    judge_label = _pretty_model(cfg.JUDGE_MODEL, cfg)
     L: List[str] = []   # report lines
 
     # --- Selective LLM-judge policy ------------------------------------------
@@ -173,8 +228,9 @@ def generate_report(
         f"**Multi-Agent Observability & Evaluation Framework** · Mind2Web benchmark",
         "",
         f"- **Generated:** {datetime.now():%Y-%m-%d %H:%M}",
-        f"- **Agent model:** `{cfg.AGENT_MODEL}` · **Judge model:** `{cfg.JUDGE_MODEL}`",
+        f"- **Agent model:** {agent_label} · **Judge model:** {judge_label}",
         f"- **Tasks evaluated:** {n} (per architecture) · **Pass threshold:** {thr:.2f}",
+        f"- **Overall rating:** {RATING_EMOJI[overall]} **{overall}**",
         f"- **Report type:** Pre-deployment sandbox evaluation",
         "",
         "---",
@@ -211,7 +267,11 @@ def generate_report(
         ("F7", f"**Overall:** the **{winner}** delivered higher task quality on this sample. "
                f"*(see §4.5)*"),
     ]
-    L += [f"- **{fid}.** {f}" for fid, f in findings]
+    L += [f"| Finding | Rating | Detail |", "|---|---|---|"]
+    L += [f"| **{fid}** | {RATING_EMOJI[ratings[fid]]} {ratings[fid]} | {f} |"
+          for fid, f in findings]
+    L += ["", f"**Overall testing rating: {RATING_EMOJI[overall]} {overall}** — "
+          f"derived from task completion, quality, and safety.", ""]
     L += _assess(
         "exec",
         "Write an executive-summary paragraph for an agent evaluation. Metrics — "
@@ -234,7 +294,7 @@ def generate_report(
         "**System A — Single Agent (baseline).** A single **ReAct** agent created with "
         "LangGraph's `create_react_agent`, given all 11 hybrid tools and a focused system "
         "prompt. It plans, selects tools, executes, and produces a final answer in one "
-        "reasoning loop. Model: `" + cfg.AGENT_MODEL + "`.",
+        "reasoning loop. Model: " + agent_label + ".",
         "",
         "**System B — Multi-Agent System (supervisor pattern).** Work is decomposed across "
         "four specialists, each a LangChain chat model with its own role, prompt, and "
@@ -242,14 +302,14 @@ def generate_report(
         "",
         "| Specialist | Role | Framework component | Tools | Model |",
         "|---|---|---|---|---|",
-        "| **Supervisor** | Routes the pipeline (sequential) | LangChain chat model | no | `"
-        + cfg.SUPERVISOR_MODEL + "` |",
-        "| **Planner** | Decomposes the task into 3–5 steps | LangChain chat model | no | `"
-        + cfg.PLANNER_MODEL + "` |",
+        "| **Supervisor** | Routes the pipeline (sequential) | LangChain chat model | no | "
+        + _pretty_model(cfg.SUPERVISOR_MODEL, cfg) + " |",
+        "| **Planner** | Decomposes the task into 3–5 steps | LangChain chat model | no | "
+        + _pretty_model(cfg.PLANNER_MODEL, cfg) + " |",
         "| **Navigator** | Executes the plan with tools | LangGraph `create_react_agent` | "
-        "**yes** | `" + cfg.NAVIGATOR_MODEL + "` |",
+        "**yes** | " + _pretty_model(cfg.NAVIGATOR_MODEL, cfg) + " |",
         "| **Validator** | Independently judges completion & quality | LangChain chat model | "
-        "no | `" + cfg.VALIDATOR_MODEL + "` |",
+        "no | " + _pretty_model(cfg.VALIDATOR_MODEL, cfg) + " |",
         "",
         "- **Tooling:** 11 hybrid tools (`src/tools.py`) — READ tools fetch live data when "
         "API keys are present (Tavily) else realistic mocks; WRITE tools (book / purchase / "
@@ -309,7 +369,7 @@ def generate_report(
         "separated), rolling-window success rate, and latency percentiles.",
         "",
         "**Judge model.** The LLM-as-judge and the AI-assessment blocks in this report use "
-        f"`{cfg.JUDGE_MODEL}`, separate from the agent model to reduce self-evaluation bias.",
+        f"{judge_label}, separate from the agent model to reduce self-evaluation bias.",
         "",
         "---", "",
     ]
@@ -590,6 +650,12 @@ def executive_summary_html(
     winner = "Multi-Agent System" if m_sc > s_sc else "Single Agent"
     cost_x = m_cost / max(s_cost, 1e-9)
     real = "tokens_source" in df_multi.columns and (df_multi["tokens_source"] == "api").any()
+    overall = _overall_rating(m_pass, m_sc, safe_rate)
+    ratings = _finding_ratings(m_pass, m_sc, m_f1, cost_x, m_lat, safe_rate, overall)
+    agent_label = _pretty_model(cfg.AGENT_MODEL, cfg)
+    judge_label = _pretty_model(cfg.JUDGE_MODEL, cfg)
+    _rate_color = {"High": "#0F6E56", "Medium": "#854F0B", "Low": "#A32D2D"}
+    _rate_bg    = {"High": "#E1F5EE", "Medium": "#FAEEDA", "Low": "#FCEBEB"}
 
     def _delta_cell(s, m, fmt, higher_better=True):
         d = m - s
@@ -622,8 +688,14 @@ def executive_summary_html(
         ("F6", f"Safety: <b>{safe_rate:.0%}</b> of MAS outputs passed all safety checks."),
         ("F7", f"Overall: the <b>{winner}</b> delivered higher task quality on this sample."),
     ]
+    def _chip(fid):
+        r = ratings[fid]
+        return (f"<span class='rate' style='color:{_rate_color[r]};"
+                f"background:{_rate_bg[r]}'>{r}</span>")
+
     findings_html = "".join(
-        f"<li><span class='fid'>{fid}</span>{txt}</li>" for fid, txt in findings
+        f"<li><span class='fid'>{fid}</span>{_chip(fid)}<span class='ftxt'>{txt}</span></li>"
+        for fid, txt in findings
     )
 
     # Embed the comparison chart as base64 (portable)
@@ -675,9 +747,15 @@ def executive_summary_html(
         margin:26px 0 12px; }}
   .lede {{ font-size:15px; color:#334155; }}
   ul.findings {{ list-style:none; padding:0; margin:0; }}
-  ul.findings li {{ padding:9px 0; border-bottom:1px dashed var(--line); font-size:14px; }}
+  ul.findings li {{ padding:9px 0; border-bottom:1px dashed var(--line); font-size:14px;
+        display:flex; align-items:baseline; gap:8px; }}
   ul.findings li:last-child {{ border-bottom:none; }}
-  .fid {{ display:inline-block; min-width:34px; font-weight:700; color:var(--teal); }}
+  .fid {{ flex:0 0 auto; min-width:26px; font-weight:700; color:var(--teal); }}
+  .rate {{ flex:0 0 auto; font-size:11px; font-weight:700; padding:2px 8px;
+        border-radius:999px; text-transform:uppercase; letter-spacing:.03em; }}
+  .ftxt {{ flex:1; }}
+  .orating {{ display:inline-block; padding:4px 12px; border-radius:999px; font-weight:700;
+        font-size:13px; margin-top:10px; }}
   table {{ width:100%; border-collapse:collapse; font-size:14px; margin-top:6px; }}
   th,td {{ text-align:right; padding:9px 10px; border-bottom:1px solid var(--line); }}
   th {{ color:var(--slate); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }}
@@ -698,12 +776,14 @@ def executive_summary_html(
     <div class="sub">Multi-Agent Observability &amp; Evaluation Framework · Mind2Web benchmark</div>
     <div class="meta">
       <span class="badge">{datetime.now():%Y-%m-%d %H:%M}</span>
-      <span class="badge">Agent: {escape(cfg.AGENT_MODEL)}</span>
-      <span class="badge">Judge: {escape(cfg.JUDGE_MODEL)}</span>
+      <span class="badge">Agent: {escape(agent_label)}</span>
+      <span class="badge">Judge: {escape(judge_label)}</span>
       <span class="badge">{n} tasks / arch</span>
       <span class="badge">threshold {cfg.EVAL_PASS_THRESHOLD:.2f}</span>
       {token_badge}
     </div>
+    <div><span class="orating" style="background:{_rate_bg[overall]};color:{_rate_color[overall]}">
+      Overall rating: {overall}</span></div>
   </div>
   <div class="body">
     <p class="lede">A single-agent baseline and a multi-agent system (Supervisor → Planner →

@@ -59,11 +59,11 @@ substantially, at a measurable cost/latency premium:
 
 | Metric | Single Agent | Multi-Agent |
 |---|---|---|
-| Pass rate | 60% | **100%** |
-| Avg task score | 0.708 | **0.805** |
-| Tool F1 | 0.368 | **0.427** |
-| Avg cost / task | $0.0296 | $0.0406 (**1.4×**) |
-| Median latency | 9.1 s | 16.9 s |
+| Pass rate | 70% | **90%** |
+| Avg task score | 0.724 | **0.816** |
+| Tool F1 | 0.383 | **0.432** |
+| Avg cost / task | $0.0330 | $0.0386 (**1.2×**) |
+| Median latency | 11.3 s | 19.7 s |
 
 *(Cost reflects real API usage — counting every ReAct round-trip, not just the final
 output. Latency is the median, robust to occasional API stalls.)*
@@ -262,7 +262,10 @@ generate_report(..., use_llm=False)                       # fully deterministic,
 
 Findings are numbered (**F1–F7**) in the Executive Summary and **cross-referenced**
 from each results section, so a reviewer can trace every headline claim back to its
-underlying metric and assessment.
+underlying metric and assessment. Each finding carries a **🟢 High / 🟡 Medium /
+🔴 Low rating**, and the report rolls these up into a single **overall testing rating**
+(from task completion, quality, and safety). Model names render as friendly labels
+(e.g. `GPT 5-4 (Azure)`), not raw deployment IDs.
 
 📥 **[Download a sample report →](docs/sample_evaluation_report.md)** (with embedded
 charts) to see the full output before running anything.
