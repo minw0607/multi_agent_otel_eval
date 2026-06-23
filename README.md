@@ -162,6 +162,12 @@ setup_phoenix(endpoint="http://collector:4317")  # or any OTLP collector
 tiktoken estimate otherwise — the `tokens_source` field records which was used, so
 cost figures are honest rather than guessed.
 
+📖 **New to OTel or want to wire up a specific backend?** See the
+**[Observability Guide →](docs/observability.md)** — a systematic walkthrough of
+OpenTelemetry concepts, how this framework emits spans, how to read a trace, and
+step-by-step setup for **Phoenix, Jaeger, Grafana Tempo, Datadog, Splunk, Langfuse,**
+and the generic OpenTelemetry Collector.
+
 ---
 
 ## Evaluation Metrics
@@ -387,7 +393,8 @@ multi_agent_otel_eval/
 │   └── report.py                   ← Audit-grade Markdown report generator
 │
 ├── docs/
-│   └── provider-setup.md           ← Step-by-step setup for Azure, OpenAI, Ollama, Groq
+│   ├── provider-setup.md           ← Step-by-step setup for Azure, OpenAI, Ollama, Groq
+│   └── observability.md            ← OTel concepts + backend setup (Phoenix/Datadog/Jaeger/…)
 │
 └── outputs/                        ← Results, traces, charts, reports (gitignored)
     ├── traces/                     ← OTLP JSON span exports
@@ -470,6 +477,6 @@ https://opentelemetry.io/docs/specs/semconv/gen-ai/
 <div align="center">
 
 Made with ❤️ for rigorous, observable agent evaluation  
-[Open an issue](https://github.com/minw0607/multi_agent_otel_eval/issues) · [Provider setup guide](docs/provider-setup.md)
+[Open an issue](https://github.com/minw0607/multi_agent_otel_eval/issues) · [Provider setup](docs/provider-setup.md) · [Observability guide](docs/observability.md)
 
 </div>
