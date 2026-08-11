@@ -303,6 +303,46 @@ This balances **rigor** (real agent behavior, real web data via Tavily) with
 **safety** (no real bookings, purchases, or form submissions). Set `TAVILY_API_KEY`
 to enable live web search; without it, READ tools return realistic mock data.
 
+### How do you score task completion if the WRITE actions are mocked?
+
+This is the central methodological question. Ideally you'd judge an agent by the
+**real-world consequence** of its actions — *"book a flight" → the airline confirms a
+seat exists under the passenger's name.* That is **outcome-based** evaluation, and it's
+the gold standard. But in a sandbox we **cannot (and must not)** produce those
+consequences: executing real bookings, purchases, and form submissions during testing
+would spend money, contact real businesses, and create real obligations — for thousands
+of test tasks. So the true end-state is unobservable by design.
+
+Instead, this framework uses **process-based (trajectory) evaluation** — it judges the
+*chain of actions the agent took toward the goal*, not the unobservable outcome:
+
+| Signal | What it checks | Answers |
+|---|---|---|
+| **Tool correctness** (`ToolCorrectnessEval`) | The sequence of tools the agent actually called (from the trace) vs. the gold `action_reprs` sequence — precision, recall, F1, and LCS order accuracy | *Did it take the right steps, in a sensible order?* |
+| **Rule-based plan checks** (`HybridEvaluator`) | Goal-keyword alignment, action verbs, specificity, overlap with the reference actions | *Does the plan actually address the task?* |
+| **LLM-as-judge** | Holistic 0–1 quality of the plan against the task + reference | *Would this trajectory plausibly complete the task?* |
+| **Mock confirmations** | WRITE tools return realistic simulated responses (e.g. `BOOK-REST-4821`), so the agent's *reaction* to success/failure is still exercised | *Does it handle the outcome correctly and stop?* |
+
+In short: **a task "passes" when the agent demonstrates the correct workflow** — locate →
+navigate → filter → invoke the right WRITE tool with the right arguments — as verified
+against the Mind2Web reference trajectory and judged for coherence. We measure
+*"did it do the right things"* as a **proxy** for *"did the real outcome occur."*
+
+**What this proxy does and doesn't tell you:**
+
+- ✅ Catches wrong tool choices, missing/extra steps, out-of-order actions, misread
+  goals, budget violations, and unsafe behavior — before any real deployment.
+- ⚠️ Cannot confirm the transaction *actually* succeeded end-to-end. A plausible,
+  correctly-sequenced trajectory could still fail against the live system (stale UI,
+  sold-out inventory, downstream validation). Process fidelity is necessary but not
+  sufficient for real success.
+
+This trade-off — real agent behavior + mocked side effects + trajectory scoring — is the
+**industry-standard pattern for pre-deployment agent evaluation**. Closing the last gap
+(observing real outcomes) requires a controlled live-execution harness — e.g. a Playwright
+browser sandbox against a staging site — which is a deliberate next step, kept out of the
+default demo precisely because it reintroduces real-world side effects.
+
 ---
 
 ## Quickstart
