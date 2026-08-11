@@ -5,7 +5,7 @@ backend** (Phoenix, Jaeger, Grafana Tempo, Datadog, Splunk, Langfuse, or a gener
 OpenTelemetry Collector).
 
 If you've never used distributed tracing for LLM apps, start at §1. If you just want to
-wire up a specific backend, jump to §6.
+wire up a specific backend, jump to §8.
 
 ---
 
@@ -36,7 +36,71 @@ OpenTelemetry does.
 
 ---
 
-## 3. The pipeline: producer → protocol → backend
+## 3. Is OpenTelemetry a standard, a library, or a server?
+
+**All three — and this is the most common point of confusion.** "OpenTelemetry" is an
+umbrella for several distinct things that live in different places:
+
+| Part of OTel | What it is | Where it runs | Does it touch your MAS data? |
+|---|---|---|---|
+| **Specification & Semantic Conventions** | Agreed-upon *definitions* — what a span is, the OTLP wire format, attribute names like `gen_ai.usage.input_tokens` | Nowhere — it's a document | No. Pure standardization. |
+| **SDK / API** (`opentelemetry-sdk`) | Actual **library code** you `pip install` and that runs **inside your process** | **Locally, in-process** (in your notebook/app) | **Yes.** It creates span objects, records timing, holds them in memory, batches, serializes, and exports them. |
+| **Instrumentation** (`openinference-instrumentation-langchain`) | Library that **auto-patches LangChain** so every call produces a span | **Locally, in-process** | **Yes.** It intercepts each LLM/tool call and captures the real inputs, outputs, tokens, and latency. |
+| **Collector** (`otelcol`) — *optional* | A standalone **server process** that receives, transforms, and forwards spans | A **separate process**, local or remote | Yes, if you run one — it processes spans *after* the SDK exports them. Not required. |
+| **Backend** (Phoenix, Datadog, …) | Stores, indexes, and visualizes spans | Local or remote server | Yes — the final consumer. |
+
+So the answer to *"is it just a standard, or does it actually process information?"* is:
+**both parts exist.** The spec is just standardization, but the **SDK and instrumentation
+are real code running locally inside your program that actively captures and processes
+telemetry from the multi-agent system.**
+
+### Where does it run — server or local?
+
+For this framework, the parts that read your MAS are **entirely local, in-process**:
+
+```
+┌─ your Python process (the notebook / app) ────────────────────────────┐
+│                                                                        │
+│   Multi-agent system (LangChain/LangGraph)                             │
+│        │  ← instrumentation intercepts each call  (LOCAL, in-process)  │
+│        ▼                                                                │
+│   OpenTelemetry SDK  ── builds spans, buffers them  (LOCAL, in-process)│
+│        │                                                                │
+└────────┼───────────────────────────────────────────────────────────────┘
+         │  exports over OTLP (network call)
+         ▼
+   Backend / Collector  ── a SERVER (localhost:6006 for local Phoenix,
+                            or a remote host for Datadog/Splunk/Langfuse)
+```
+
+- **Capture + span creation = local**, always. No server is involved in *producing* spans.
+- **Storage + visualization = a server** — but "server" can just mean a local process
+  (`setup_phoenix()` launches Phoenix on `localhost:6006`), or a remote SaaS endpoint.
+- There is **no OpenTelemetry server** in the middle by default. The Collector (§8.7) is an
+  optional separate server you add only when you want to fan out to multiple backends or do
+  central processing.
+
+### What actually happens to one span (concretely)
+
+When the Navigator makes an LLM call, this all happens **locally, in-process**, in
+milliseconds:
+
+1. **Instrumentation intercepts** the call (it wrapped LangChain when you ran `setup_phoenix()`).
+2. The **SDK creates a span object** — records the start time, and attaches attributes:
+   `gen_ai.request.model`, the input messages, `gen_ai.agent.name = navigator`.
+3. The call runs; on return the SDK **closes the span** — end time, output, and real
+   `gen_ai.usage.input_tokens` / `output_tokens` from the API response.
+4. The span is handed to a **span processor** which buffers it and, over OTLP, **exports**
+   it to the backend (a network send).
+5. The **backend** (a server) receives, stores, and renders it in the UI.
+
+Steps 1–4 are code executing in your program; only step 5 is "elsewhere." That's why you
+get real tokens, timing, and inputs/outputs — the SDK genuinely observed them as they
+happened, rather than reading a standard.
+
+---
+
+## 4. The pipeline: producer → protocol → backend
 
 The single most important mental model. These are **layers, not alternatives**:
 
@@ -64,7 +128,7 @@ The single most important mental model. These are **layers, not alternatives**:
 
 ---
 
-## 4. How this framework emits telemetry
+## 5. How this framework emits telemetry
 
 This repo has **two independent tracing systems** that run in parallel:
 
@@ -89,7 +153,7 @@ call — **no other code changes needed**.
 
 ---
 
-## 5. Reading a trace
+## 6. Reading a trace
 
 In any backend you'll see the same structure (the names below are what this framework
 produces):
@@ -122,7 +186,7 @@ why an agent chose the wrong tool or produced a low-scoring answer.
 
 ---
 
-## 6. Choosing a backend
+## 7. Choosing a backend
 
 | Backend | Best for | Hosting | Cost | LLM-aware UI |
 |---|---|---|---|---|
@@ -138,7 +202,7 @@ already runs them; Jaeger/Tempo for a free, self-hosted general-purpose option.
 
 ---
 
-## 7. Backend setup tutorials
+## 8. Backend setup tutorials
 
 All backends speak OTLP, so the pattern is always: **point the OTLP exporter at the
 backend's endpoint, add any required auth header.** The cleanest vendor-neutral way is the
@@ -151,10 +215,10 @@ export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer ..." # backend-specific,
 export OTEL_SERVICE_NAME="multi-agent-otel-eval"
 ```
 
-Then initialize tracing once (see the generic snippet in §8). For Phoenix specifically, the
+Then initialize tracing once (see the generic snippet in §9). For Phoenix specifically, the
 repo's `setup_phoenix()` is the shortcut.
 
-### 7.1 Phoenix (recommended starting point)
+### 8.1 Phoenix (recommended starting point)
 
 ```bash
 pip install arize-phoenix openinference-instrumentation-langchain \
@@ -170,7 +234,7 @@ setup_phoenix()                  # launches local UI at http://localhost:6006, i
   `setup_phoenix(endpoint="https://app.phoenix.arize.com/v1/traces", launch_local=False)`
   and set `OTEL_EXPORTER_OTLP_HEADERS="api_key=<your-key>"`.
 
-### 7.2 Jaeger
+### 8.2 Jaeger
 
 Jaeger ingests OTLP natively (v1.35+).
 
@@ -183,10 +247,10 @@ docker run --rm -p 16686:16686 -p 4317:4317 -p 4318:4318 \
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 ```
 
-Run the generic init (§8). View traces at **http://localhost:16686** (pick service
+Run the generic init (§9). View traces at **http://localhost:16686** (pick service
 `multi-agent-otel-eval`).
 
-### 7.3 Grafana Tempo
+### 8.3 Grafana Tempo
 
 Run Tempo (Docker) with OTLP enabled, then add it as a data source in Grafana.
 
@@ -197,7 +261,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"   # Tempo OTLP ingest
 Explore traces in Grafana → Explore → Tempo. Best when you already use Grafana for metrics
 and want traces in the same pane.
 
-### 7.4 Datadog
+### 8.4 Datadog
 
 Two common paths:
 
@@ -212,9 +276,9 @@ Two common paths:
 View under **APM → Traces** (and **LLM Observability** if enabled).
 
 **B) Via the OpenTelemetry Collector** with the `datadog` exporter — use this when you want
-one collector fanning out to several backends (see §7.7).
+one collector fanning out to several backends (see §8.7).
 
-### 7.5 Splunk Observability Cloud
+### 8.5 Splunk Observability Cloud
 
 Send OTLP/HTTP directly to the Splunk ingest endpoint (replace `<realm>`, e.g. `us1`):
 
@@ -227,7 +291,7 @@ export OTEL_EXPORTER_OTLP_HEADERS="X-SF-Token=<access-token>"
 Or run the **Splunk Distribution of the OpenTelemetry Collector** and point the app at it
 (localhost:4317). View under **APM**.
 
-### 7.6 Langfuse
+### 8.6 Langfuse
 
 Langfuse exposes an OTLP endpoint and works with OpenInference.
 
@@ -241,7 +305,7 @@ export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ${AUTH}"
 
 (Self-hosted Langfuse: swap the host.) View traces in the Langfuse UI.
 
-### 7.7 Generic OpenTelemetry Collector (the universal hub)
+### 8.7 Generic OpenTelemetry Collector (the universal hub)
 
 The Collector is a standalone process that receives OTLP and **fans out to one or more
 backends** — the most flexible setup. Minimal `config.yaml`:
@@ -268,10 +332,10 @@ collector config — no app changes.
 
 ---
 
-## 8. The vendor-neutral init snippet
+## 9. The vendor-neutral init snippet
 
 For any non-Phoenix backend, this ~12-line setup uses the **same OpenInference producer**
-with a standard OTLP exporter, honoring the `OTEL_EXPORTER_OTLP_*` env vars from §7:
+with a standard OTLP exporter, honoring the `OTEL_EXPORTER_OTLP_*` env vars from §8:
 
 ```python
 from opentelemetry import trace
@@ -292,7 +356,7 @@ LangChainInstrumentor().instrument()   # auto-trace LangChain/LangGraph
 
 ---
 
-## 9. Cost & token attributes
+## 10. Cost & token attributes
 
 Backends compute cost from the GenAI usage attributes this framework sets:
 
@@ -311,7 +375,7 @@ cost is authoritative.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
@@ -324,7 +388,7 @@ cost is authoritative.
 
 ---
 
-## 11. Further reading
+## 12. Further reading
 
 - OpenTelemetry GenAI Semantic Conventions — https://opentelemetry.io/docs/specs/semconv/gen-ai/
 - OpenInference — https://github.com/Arize-ai/openinference
