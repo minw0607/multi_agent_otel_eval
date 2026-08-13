@@ -11,11 +11,16 @@ Both can be exported to OTLP JSON for any backend (Datadog, Splunk, Phoenix, Lan
 import json
 import time
 import uuid
+from contextvars import ContextVar
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# Tracks the current span per execution context. Used as a fallback for span
+# parenting; callbacks should pass `parent=` explicitly (see start_span).
+_current_span: ContextVar = ContextVar("otel_current_span", default=None)
 
 
 # ---------------------------------------------------------------------------
@@ -28,6 +33,12 @@ GEN_AI_ATTRIBUTES = {
     "OPERATION_NAME":    "gen_ai.operation.name",
     "INPUT_TOKENS":      "gen_ai.usage.input_tokens",
     "OUTPUT_TOKENS":     "gen_ai.usage.output_tokens",
+    # Extensions for transparency work (docs/transparency_spec.md)
+    "REASONING_TOKENS":  "gen_ai.usage.reasoning_tokens",   # billed, unreadable
+    "CACHED_TOKENS":     "gen_ai.usage.cached_tokens",      # billed differently
+    "USAGE_SOURCE":      "gen_ai.usage.source",             # api | estimated
+    "USAGE_TIER":        "gen_ai.usage.tier",               # verified|trusted|asserted
+    "CALL_INDEX":        "gen_ai.call.index",               # per-call sequence
     "AGENT_NAME":        "gen_ai.agent.name",
     "AGENT_ROLE":        "gen_ai.agent.role",
     "TOOL_NAME":         "gen_ai.tool.name",
@@ -61,7 +72,12 @@ class ExecutionTrace:
     start_time: float
     end_time: Optional[float] = None
 
+    # Externalized reasoning artifacts — the plan, rationales, and stated
+    # intent produced by the agents. Distinct from `agent_summaries`, which
+    # holds cost/accounting strings (this field previously held those, which
+    # made its name misleading; see docs/transparency_spec.md R1).
     reasoning_steps: List[str]       = field(default_factory=list)
+    agent_summaries: List[str]       = field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
     decision_points: List[Dict]      = field(default_factory=list)
     errors: List[str]                = field(default_factory=list)
@@ -70,6 +86,10 @@ class ExecutionTrace:
     agent_output_tokens: int = 0
     judge_input_tokens: int  = 0
     judge_output_tokens: int = 0
+    # Reported but unreadable output tokens (o-series); billed all the same.
+    reasoning_tokens: int    = 0
+    # Input tokens served from cache — billed differently, and outside our control.
+    cached_tokens: int       = 0
 
     agent_cost: float = 0.0
     judge_cost: float = 0.0
@@ -249,13 +269,29 @@ class HierarchicalTracer:
         )
         self.traces[trace_id].append(root)
         self.active_spans.append(root)
+        try:
+            root._ctx_token = _current_span.set(root)
+        except Exception:
+            root._ctx_token = None
         return root
 
     def start_span(self, name: str, kind: str = SpanKind.INTERNAL.value,
-                   attributes: Dict = None) -> OTelSpan:
-        if not self.active_spans:
+                   attributes: Dict = None, parent: OTelSpan = None) -> OTelSpan:
+        """
+        Open a child span.
+
+        Parent resolution, in order of precedence:
+          1. `parent` passed explicitly  ← **use this from callbacks**
+          2. the current span for this execution context (contextvar)
+          3. the most recently opened span (legacy behaviour)
+
+        Callbacks may fire on a worker thread, where the "most recently opened
+        span" is a shared mutable stack and therefore racy. Passing `parent`
+        explicitly makes parenting deterministic regardless of threading.
+        """
+        parent = parent or _current_span.get() or (self.active_spans[-1] if self.active_spans else None)
+        if parent is None:
             raise RuntimeError("No active span. Call start_trace() first.")
-        parent = self.active_spans[-1]
         span = OTelSpan(
             trace_id=parent.trace_id,
             span_id=str(uuid.uuid4()),
@@ -267,6 +303,10 @@ class HierarchicalTracer:
         )
         self.traces[parent.trace_id].append(span)
         self.active_spans.append(span)
+        try:
+            span._ctx_token = _current_span.set(span)
+        except Exception:
+            span._ctx_token = None
         return span
 
     def end_span(self, span: OTelSpan, status: str = SpanStatus.OK.value,
@@ -276,6 +316,14 @@ class HierarchicalTracer:
         span.end(status=status, error=error)
         if span in self.active_spans:
             self.active_spans.remove(span)
+        token = getattr(span, "_ctx_token", None)
+        if token is not None:
+            try:
+                _current_span.reset(token)
+            except (ValueError, LookupError):
+                # Token was created in a different context (e.g. the span was
+                # opened on another thread). Nothing to unwind here.
+                pass
 
     def end_trace(self):
         while self.active_spans:

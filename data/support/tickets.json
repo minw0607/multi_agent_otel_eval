@@ -1,0 +1,240 @@
+{
+  "_comment": "Labeled support tickets. Ground truth enables OUTCOME evaluation (did the reply cite the right article? was escalation correct?) in addition to trajectory scoring. The 'trap' field marks tickets deliberately constructed to validate a specific attribution metric — see docs/transparency_spec.md section 7.",
+  "trap_legend": {
+    "multi-hop": "Answerable only by combining 2+ articles; validates context_growth and history accumulation.",
+    "duplicate-bait": "One article is relevant to two sub-questions, tempting a re-fetch; validates duplicate_retrievals with a known correct count.",
+    "obvious-article-wrong": "The surface-level match gives the wrong answer; validates verification value and plan_execution_divergence.",
+    "escalation-required": "A mandatory escalation trigger is present; validates outcome scoring of the escalate decision."
+  },
+  "tickets": [
+    {
+      "id": "T-1001",
+      "difficulty": "easy",
+      "order_id": null,
+      "subject": "How long do I have to send something back?",
+      "body": "Hi - I bought a set of speakers a couple of weeks ago and I'm not sure I want to keep them. What's your return window? Nothing is wrong with them, I just may not need them.",
+      "ground_truth": {
+        "kb_articles": ["kb-returns-window"],
+        "policy": null,
+        "escalate": false,
+        "requires_order_lookup": false,
+        "trap": null,
+        "key_facts": ["30 calendar days from delivery date", "change-of-mind returns incur a $7.95 return shipping fee"]
+      }
+    },
+    {
+      "id": "T-1002",
+      "difficulty": "easy",
+      "order_id": "ORD-48477",
+      "subject": "Where is my tablet?",
+      "body": "My order says shipped but the tracking hasn't moved in two days. Has it been lost? Order ORD-48477.",
+      "ground_truth": {
+        "kb_articles": ["kb-shipping-tracking"],
+        "policy": null,
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": null,
+        "key_facts": ["48-hour tracking gaps are normal", "parcels declared lost only after 7 business days with no movement"]
+      }
+    },
+    {
+      "id": "T-1003",
+      "difficulty": "easy",
+      "order_id": null,
+      "subject": "Can't sign in",
+      "body": "I've tried to log in four times and it keeps rejecting my password. I requested a reset link twice and clicked the first one but it said it was invalid.",
+      "ground_truth": {
+        "kb_articles": ["kb-account-login"],
+        "policy": null,
+        "escalate": false,
+        "requires_order_lookup": false,
+        "trap": null,
+        "key_facts": ["reset links are single-use and expire after 30 minutes", "account locks for 30 minutes after five failed attempts"]
+      }
+    },
+    {
+      "id": "T-1004",
+      "difficulty": "easy",
+      "order_id": "ORD-48502",
+      "subject": "Keyboard is cheaper now",
+      "body": "I bought a mechanical keyboard from you and it's now $20 less on your site. Can I get the difference back? Order ORD-48502.",
+      "ground_truth": {
+        "kb_articles": ["kb-price-match"],
+        "policy": null,
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": null,
+        "key_facts": ["price adjustment available within 14 days of delivery", "delivered 9 days ago so the request is in window"]
+      }
+    },
+    {
+      "id": "T-1005",
+      "difficulty": "easy",
+      "order_id": null,
+      "subject": "Gift card plus discount code?",
+      "body": "I have a $50 gift card and a 10% off code. Can I use both on the same order, and which one comes off first?",
+      "ground_truth": {
+        "kb_articles": ["kb-gift-cards"],
+        "policy": null,
+        "escalate": false,
+        "requires_order_lookup": false,
+        "trap": null,
+        "key_facts": ["one promo code may be combined with gift cards", "promo applies to merchandise subtotal first, gift card to the remaining balance"]
+      }
+    },
+    {
+      "id": "T-1006",
+      "difficulty": "medium",
+      "order_id": "ORD-48210",
+      "subject": "Monitor arrived cracked - I'm in Canada",
+      "body": "The 27-inch monitor I ordered arrived with a cracked panel. I'm in Toronto. I'd rather have a refund than a replacement. Also I paid about $70 in duties at the door - do I get that back? Order ORD-48210.",
+      "ground_truth": {
+        "kb_articles": ["kb-damaged-items", "kb-international-orders", "kb-refund-timing"],
+        "policy": "international",
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": "multi-hop",
+        "key_facts": ["report damage within 5 days with carton photographs", "duties are never refundable", "international refunds cover merchandise value only"]
+      }
+    },
+    {
+      "id": "T-1007",
+      "difficulty": "medium",
+      "order_id": "ORD-48610",
+      "subject": "Charged twice, and when does my refund land?",
+      "body": "Two charges of $189 showed up for order ORD-48610. Please refund the second one. Separately, I returned a different item last week - when should that refund show up on my card?",
+      "ground_truth": {
+        "kb_articles": ["kb-duplicate-charge", "kb-refund-timing"],
+        "policy": "refunds",
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": "duplicate-bait",
+        "expected_unique_retrievals": 2,
+        "key_facts": ["compare Pending vs Posted to distinguish authorisation from capture", "refunds post 8-10 business days from shipment"]
+      }
+    },
+    {
+      "id": "T-1008",
+      "difficulty": "medium",
+      "order_id": "ORD-48477",
+      "subject": "Please cancel my order",
+      "body": "I'd like to cancel order ORD-48477 - I found the same tablet locally. It hasn't arrived yet so I assume that's fine?",
+      "ground_truth": {
+        "kb_articles": ["kb-order-cancellation", "kb-returns-window"],
+        "policy": null,
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": "obvious-article-wrong",
+        "key_facts": ["order status is Shipped, so cancellation is no longer possible", "must be handled as a return after delivery"]
+      }
+    },
+    {
+      "id": "T-1009",
+      "difficulty": "medium",
+      "order_id": "ORD-48566",
+      "subject": "Dropped my camera - am I covered?",
+      "body": "I bought the 4K action camera with your protection plan and dropped it on concrete. The lens housing is cracked. Is that covered, and what does it cost me? Order ORD-48566.",
+      "ground_truth": {
+        "kb_articles": ["kb-care-plan", "kb-warranty"],
+        "policy": "warranty",
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": "multi-hop",
+        "key_facts": ["accidental damage is covered by NorthPeak Care, not the manufacturer warranty", "$49 service fee per accidental damage claim", "limit of two claims per 12 months"]
+      }
+    },
+    {
+      "id": "T-1010",
+      "difficulty": "medium",
+      "order_id": "ORD-48688",
+      "subject": "You sent the wrong display",
+      "body": "I ordered a 32-inch curved display and received a 24-inch flat one. Model on the box is NP-MON-24F. I need the right one urgently. Order ORD-48688.",
+      "ground_truth": {
+        "kb_articles": ["kb-wrong-item", "kb-returns-shipping-label"],
+        "policy": null,
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": null,
+        "key_facts": ["correct item ships immediately on priority at no charge", "incorrect item must be returned within 21 days using the prepaid label"]
+      }
+    },
+    {
+      "id": "T-1011",
+      "difficulty": "medium",
+      "order_id": null,
+      "subject": "Payment failed but money is gone",
+      "body": "My checkout failed twice with a card error and no order was created, but my bank shows two pending amounts. Please refund them.",
+      "ground_truth": {
+        "kb_articles": ["kb-failed-payment", "kb-duplicate-charge"],
+        "policy": "refunds",
+        "escalate": false,
+        "requires_order_lookup": false,
+        "trap": null,
+        "key_facts": ["no capture occurred so there is nothing to refund", "holds release automatically in 3-5 business days", "customer must contact issuer if the hold persists beyond 7 business days"]
+      }
+    },
+    {
+      "id": "T-1012",
+      "difficulty": "hard",
+      "order_id": "ORD-48355",
+      "subject": "Laptop stopped turning on - I want to return it",
+      "body": "The 14-inch Pro laptop I bought will not power on at all any more. It just died one morning. I want to return it for a refund. I know it's been a little while - the order was ORD-48355.",
+      "ground_truth": {
+        "kb_articles": ["kb-warranty"],
+        "distractor_articles": ["kb-returns-window"],
+        "policy": "warranty",
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": "obvious-article-wrong",
+        "key_facts": ["delivered 60 days ago so the 30-day return window has closed", "a unit that stops powering on within 12 months is a valid warranty claim", "warranty remedy is repair or replacement, not refund by default"]
+      }
+    },
+    {
+      "id": "T-1013",
+      "difficulty": "hard",
+      "order_id": "ORD-48610",
+      "subject": "Third time asking - this is unacceptable",
+      "body": "This is the third time I have contacted you about the SSD that was never refunded. Nobody has resolved it. If it is not fixed this week I will file a chargeback and speak to my lawyer. Order ORD-48610.",
+      "ground_truth": {
+        "kb_articles": ["kb-escalation-policy"],
+        "policy": "escalation",
+        "escalate": true,
+        "escalation_trigger": "third contact on the same issue; chargeback and legal action mentioned",
+        "requires_order_lookup": true,
+        "trap": "escalation-required",
+        "key_facts": ["escalation is mandatory, not discretionary", "agent must not offer a remedy before escalating"]
+      }
+    },
+    {
+      "id": "T-1014",
+      "difficulty": "hard",
+      "order_id": "ORD-48688",
+      "subject": "Price dropped and the unit is faulty",
+      "body": "The 32-inch display I bought three days ago now shows $80 cheaper on your site. On top of that it has a dead pixel column down the left side. I want the price difference AND a working unit. Order ORD-48688.",
+      "ground_truth": {
+        "kb_articles": ["kb-price-match", "kb-warranty", "kb-damaged-items"],
+        "policy": "warranty",
+        "escalate": false,
+        "requires_order_lookup": true,
+        "trap": "multi-hop",
+        "key_facts": ["price adjustment is available within 14 days and is independent of warranty", "a dead pixel column is a defect covered by warranty", "both remedies can be granted on the same order"]
+      }
+    },
+    {
+      "id": "T-1015",
+      "difficulty": "hard",
+      "order_id": null,
+      "subject": "Quote for 50 monitors, NET-30",
+      "body": "We are outfitting a new office and need 50 of the 27-inch monitors. We require a formal quote, a purchase order number on the invoice, NET-30 terms, and our tax exemption certificate applied. Who handles this?",
+      "ground_truth": {
+        "kb_articles": ["kb-business-orders", "kb-escalation-policy"],
+        "policy": "escalation",
+        "escalate": true,
+        "escalation_trigger": "business/bulk order requiring purchase-order billing and NET terms",
+        "requires_order_lookup": false,
+        "trap": "escalation-required",
+        "key_facts": ["consumer support cannot issue quotes or set NET terms", "must route to Business Sales with company name, quantity and terms"]
+      }
+    }
+  ]
+}

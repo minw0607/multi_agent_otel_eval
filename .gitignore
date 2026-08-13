@@ -8,3 +8,8 @@ __pycache__/
 outputs/
 *.json
 !requirements*.json
+# Support-desk corpus is source data, not output — keep it tracked
+!data/support/*.json
+
+# Real-tool sandbox: agent writes land here, never committed
+workspace/

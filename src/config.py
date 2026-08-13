@@ -114,21 +114,47 @@ class Config:
     # =========================================================================
     # LLM FACTORY
     # =========================================================================
+    @staticmethod
+    def is_reasoning_model(model: str) -> bool:
+        """
+        True for OpenAI o-series reasoning models (o1, o3, o3-mini, o4-mini, …).
+
+        These differ from chat models in two ways that matter here:
+          * they reject `temperature` and require `max_completion_tokens`
+          * they report `reasoning_tokens` — output tokens that are billed but
+            never returned to the caller (see docs/transparency_spec.md §2)
+
+        Matches a leading 'o' followed by a digit, so 'gpt-4o' (which contains
+        '4o', not 'o4') is correctly excluded.
+        """
+        import re
+        return bool(re.match(r"^o\d", (model or "").strip().lower()))
+
     @classmethod
-    def create_llm(cls, role: str = "agent", model: str = None):
+    def create_llm(cls, role: str = "agent", model: str = None, **overrides):
         """
         Return a LangChain chat model for the given role ('agent' or 'judge').
 
         Pass `model` to override the model name (used by the multi-agent system
-        to give each specialist its own model).
+        to give each specialist its own model). Extra kwargs pass through.
 
-        Auto-detection rule:
-          OPENAI_API_VERSION is set  →  AzureChatOpenAI
-          OPENAI_API_VERSION is blank →  ChatOpenAI (OpenAI / Ollama / Groq / etc.)
+        Auto-detection rules:
+          OPENAI_API_VERSION set    →  AzureChatOpenAI, else ChatOpenAI
+          o-series model detected   →  max_completion_tokens, no temperature
         """
         model      = model or (cls.AGENT_MODEL if role == "agent" else cls.JUDGE_MODEL)
         temp       = cls.AGENT_TEMPERATURE if role == "agent" else cls.JUDGE_TEMPERATURE
         max_tokens = cls.AGENT_MAX_TOKENS  if role == "agent" else cls.JUDGE_MAX_TOKENS
+
+        params = {}
+        if cls.is_reasoning_model(model):
+            # o-series: temperature is rejected; the budget must cover hidden
+            # reasoning tokens as well as visible output, hence the headroom.
+            params["max_completion_tokens"] = max(max_tokens, 2000) * 2
+        else:
+            params["temperature"] = temp
+            params["max_tokens"]  = max_tokens
+        params.update(overrides)
 
         if cls.API_VERSION:
             from langchain_openai import AzureChatOpenAI
@@ -140,9 +166,8 @@ class Config:
                 azure_endpoint=cls.BASE_URL,
                 api_version=cls.API_VERSION,
                 api_key=cls.API_KEY,
-                temperature=temp,
-                max_tokens=max_tokens,
                 default_headers=extra_headers or None,
+                **params,
             )
         else:
             from langchain_openai import ChatOpenAI
@@ -150,8 +175,7 @@ class Config:
                 model=model,
                 base_url=cls.BASE_URL,
                 api_key=cls.API_KEY,
-                temperature=temp,
-                max_tokens=max_tokens,
+                **params,
             )
 
     @classmethod

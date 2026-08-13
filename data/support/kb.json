@@ -1,0 +1,119 @@
+{
+  "_comment": "Customer-facing knowledge base for NorthPeak Electronics (fictional). Synthetic corpus authored as a measuring instrument: article boundaries and overlaps are deliberately designed so that retrieval metrics (duplicate detection, multi-hop context growth) have known correct answers. See docs/transparency_spec.md section 7.",
+  "articles": [
+    {
+      "id": "kb-returns-window",
+      "title": "Return window for standard purchases",
+      "tags": ["returns", "refund", "window", "30 days"],
+      "body": "Most items purchased from NorthPeak may be returned within 30 calendar days of the delivery date for a full refund. The 30-day clock starts on the date the carrier marks the package delivered, not the order date. Items must be returned in their original packaging with all included accessories. Opened software, downloadable licences, and clearance items marked FINAL SALE are not eligible. Returns received after 30 days are refused and returned to sender at the customer's expense. If the item is defective rather than unwanted, the return window does not apply and the manufacturer warranty governs instead. See 'Manufacturer warranty coverage' for defects reported after 30 days."
+    },
+    {
+      "id": "kb-returns-shipping-label",
+      "title": "Printing a prepaid return shipping label",
+      "tags": ["returns", "label", "shipping", "RMA"],
+      "body": "To return an eligible item, sign in and open Order History, select the order, and choose Start a Return. Select a reason and confirm. A prepaid return label and an RMA number are emailed within 15 minutes and are also available under Order History. Write the RMA number on the outside of the box. Drop the package at any partner carrier location within 14 days of generating the label; labels expire after 14 days and a new one must be requested. NorthPeak covers return shipping when the item is defective, damaged on arrival, or shipped in error. For change-of-mind returns a flat $7.95 return shipping fee is deducted from the refund."
+    },
+    {
+      "id": "kb-refund-timing",
+      "title": "When refunds are issued and how long they take",
+      "tags": ["refund", "timing", "credit", "processing"],
+      "body": "Refunds are issued to the original payment method once the returned item arrives at our warehouse and passes inspection, which typically takes 2 business days after delivery to the warehouse. After inspection, the refund is released within 1 business day. Card issuers then take an additional 5 to 7 business days to post the credit to the customer's statement. Total elapsed time is therefore usually 8 to 10 business days from the day the customer ships the item. Refunds to gift cards post within 24 hours. NorthPeak cannot accelerate the issuing bank's posting time. If more than 10 business days have passed since warehouse receipt, the case should be investigated."
+    },
+    {
+      "id": "kb-damaged-items",
+      "title": "Item arrived damaged or cracked",
+      "tags": ["damaged", "broken", "cracked", "delivery"],
+      "body": "If an item arrives physically damaged, report it within 5 calendar days of delivery. Photograph the outer carton, the packing material, and the damage itself before discarding anything; carrier claims are denied without carton photographs. Open a case under Order History and select Damaged on Arrival, then upload the photographs. NorthPeak ships a replacement at no charge as soon as the photographs are reviewed, usually within 1 business day, and provides a prepaid label for the damaged unit. If a replacement is unavailable, a full refund including original shipping is issued. Damage reported after 5 days is handled as a warranty claim rather than a shipping claim."
+    },
+    {
+      "id": "kb-wrong-item",
+      "title": "Wrong item shipped",
+      "tags": ["wrong item", "incorrect", "mis-ship"],
+      "body": "If the item received does not match the item ordered, report it under Order History using Incorrect Item Received. Provide the model number printed on the item's label so the mis-pick can be traced. NorthPeak ships the correct item immediately on a priority service at no charge and does not wait for the incorrect unit to be returned first. A prepaid return label for the incorrect item is emailed at the same time and must be used within 21 days; if the incorrect item is not returned within 21 days its value may be charged to the original payment method. Return shipping is always free for mis-ships."
+    },
+    {
+      "id": "kb-warranty",
+      "title": "Manufacturer warranty coverage",
+      "tags": ["warranty", "defect", "stopped working", "repair", "1 year"],
+      "body": "All new electronics sold by NorthPeak carry a 12-month manufacturer warranty beginning on the delivery date. The warranty covers failures arising from defective materials or workmanship, including units that stop powering on, develop screen or battery faults, or fail under normal use. It does not cover accidental damage, liquid ingress, cosmetic wear, or damage from unauthorised repair. Warranty claims are valid for the full 12 months and are independent of the 30-day return window: an item that fails on day 45 is a warranty claim, not a late return. To open a claim, provide the order number and a description of the fault. Approved claims are repaired or replaced at NorthPeak's discretion; refunds are not the default remedy under warranty."
+    },
+    {
+      "id": "kb-care-plan",
+      "title": "NorthPeak Care extended protection plan",
+      "tags": ["care plan", "extended warranty", "accidental damage", "protection"],
+      "body": "NorthPeak Care is an optional paid plan that extends coverage to 24 or 36 months and, unlike the manufacturer warranty, includes accidental damage from handling such as drops and liquid spills. Accidental damage claims are limited to two per 12-month period and carry a service fee of $49 per claim. NorthPeak Care must be purchased within 30 days of the original order. It does not cover loss, theft, cosmetic damage that does not affect function, or damage caused deliberately. Plan holders receive expedited replacement shipping. Coverage under NorthPeak Care runs alongside the manufacturer warranty; during the first 12 months the manufacturer warranty is applied first for defect claims because it carries no service fee."
+    },
+    {
+      "id": "kb-shipping-tracking",
+      "title": "Tracking an order and delivery windows",
+      "tags": ["tracking", "delivery", "where is my order", "shipping status"],
+      "body": "Tracking numbers are emailed when the carrier scans the parcel, which is usually within 24 hours of the order being packed. Tracking is also shown under Order History. Standard delivery is 3 to 5 business days after dispatch, expedited is 2 business days, and priority is next business day for orders placed before 2pm local time. Tracking that has not updated for 48 hours usually indicates a carrier scan gap rather than a lost parcel; parcels are only declared lost after 7 business days with no movement, at which point a replacement is dispatched. Delivery estimates exclude weekends and public holidays. Remote and rural postcodes may add 2 business days."
+    },
+    {
+      "id": "kb-shipping-costs",
+      "title": "Shipping charges and free shipping threshold",
+      "tags": ["shipping cost", "free shipping", "delivery fee"],
+      "body": "Standard shipping is free on orders with a merchandise subtotal of $75 or more after discounts and before tax. Below that threshold standard shipping is $6.95. Expedited shipping is $14.95 and priority is $24.95 regardless of order value. Oversized items such as large displays carry a $39 handling surcharge that is shown at checkout and is not waived by the free shipping threshold. Shipping charges are refunded only when the return is caused by a NorthPeak error, a defect, or damage on arrival. For change-of-mind returns the original shipping charge is not refunded."
+    },
+    {
+      "id": "kb-international-orders",
+      "title": "International orders to Canada and Mexico",
+      "tags": ["international", "canada", "mexico", "customs", "duties"],
+      "body": "NorthPeak ships to Canada and Mexico. International delivery is 7 to 12 business days and is not available with expedited or priority service. Import duties and taxes are collected by the carrier at delivery and are the customer's responsibility; NorthPeak does not prepay duties and cannot refund them. International returns carry an extended 45-day window in place of the standard 30 days to allow for transit time, but the customer must pay return shipping unless the item is defective or damaged. Refunds on international orders are issued for the merchandise value only; original shipping, duties, and taxes are not refunded. Warranty service for international orders is handled by mail-in depot only."
+    },
+    {
+      "id": "kb-order-cancellation",
+      "title": "Cancelling an order before it ships",
+      "tags": ["cancel", "cancellation", "stop order"],
+      "body": "Orders can be cancelled at no charge at any point before the warehouse marks them as Picked. Open Order History and choose Cancel Order; if the button is absent the order has already entered fulfilment and cannot be cancelled. Once an order shows Picked, Packed, or Shipped it must instead be handled as a return after delivery. Cancellation releases the payment authorisation immediately, but the customer's bank may take 3 to 5 business days to remove the pending hold from their statement. Partial cancellation of individual lines is not supported; the whole order must be cancelled and reordered."
+    },
+    {
+      "id": "kb-order-modification",
+      "title": "Changing a shipping address after ordering",
+      "tags": ["change address", "modify order", "wrong address"],
+      "body": "Shipping addresses can be edited only while the order status is Received. Once the order is Picked the address is locked and transmitted to the carrier. If the order has shipped to an incorrect address, request a carrier intercept, which costs $18 and succeeds roughly half the time. If intercept fails and the parcel is delivered to the wrong address, the case is treated as a lost parcel and a replacement is dispatched after carrier investigation, typically 7 business days. Address changes cannot cross international borders or change the destination country; such orders must be cancelled and reordered."
+    },
+    {
+      "id": "kb-duplicate-charge",
+      "title": "Duplicate charges and pending authorisations",
+      "tags": ["duplicate charge", "charged twice", "double charge", "authorisation"],
+      "body": "A second identical amount on a statement is usually a pending authorisation rather than a second capture. NorthPeak authorises the card at checkout and captures the funds when the order ships; some banks display both entries until the authorisation expires, which takes 3 to 5 business days. To confirm whether a true duplicate capture occurred, compare the two entries: authorisations show as Pending while captures are Posted. If two Posted charges exist for the same order number, a genuine duplicate has occurred and the second capture is refunded in full on the same day it is confirmed. Refund posting timelines then follow the standard refund schedule."
+    },
+    {
+      "id": "kb-failed-payment",
+      "title": "Declined payments and funds held after a failure",
+      "tags": ["payment failed", "declined", "held funds", "pending"],
+      "body": "When a payment is declined the order is not created, but the issuing bank may still place a temporary hold for the attempted amount. These holds are released automatically, usually within 3 to 5 business days, and NorthPeak cannot release them manually because no capture ever took place. Common decline causes are address verification mismatch, insufficient available credit, and issuer fraud rules triggered by a first-time purchase. Customers should verify the billing address matches their statement exactly and retry once; repeated retries can create multiple holds. If a hold persists beyond 7 business days the customer must contact their issuing bank, as NorthPeak has no record of the transaction to reverse."
+    },
+    {
+      "id": "kb-account-login",
+      "title": "Password reset and two-factor authentication",
+      "tags": ["password", "login", "account", "2FA", "sign in"],
+      "body": "To reset a password, choose Forgot Password on the sign-in page and enter the account email. A reset link valid for 30 minutes is sent; check spam folders if it does not arrive within 5 minutes. Reset links can only be used once. If two-factor authentication is enabled and the customer has lost access to their device, recovery requires identity verification using the last four digits of a payment method on file and a recent order number. Accounts lock for 30 minutes after five failed sign-in attempts. Email addresses on an account can only be changed from within account settings while signed in; support cannot change them on the customer's behalf."
+    },
+    {
+      "id": "kb-price-match",
+      "title": "Price adjustments and competitor price matching",
+      "tags": ["price match", "price drop", "price adjustment", "cheaper"],
+      "body": "If a NorthPeak price drops within 14 calendar days of the delivery date, a one-time price adjustment for the difference is issued to the original payment method. Requests must reference the order number. Competitor matching applies to identical in-stock items from a list of approved national retailers and must be requested before purchase, not afterwards. Price adjustments are not available on clearance items, bundle promotions, limited-time flash sales under 24 hours, or items purchased with a stacked promotional code. Only one adjustment per order line is permitted. Price adjustment is independent of returns and warranty and can be combined with a warranty claim on the same item."
+    },
+    {
+      "id": "kb-gift-cards",
+      "title": "Gift cards and combining them with promotional codes",
+      "tags": ["gift card", "promo code", "discount", "stacking"],
+      "body": "Gift cards can be applied to any order and combined with one promotional code. The promotional code is applied to the merchandise subtotal first, and the gift card is then applied to the remaining balance including tax and shipping. Gift cards never expire and carry no maintenance fees. Multiple gift cards can be applied to a single order up to a limit of five. If an order paid partly by gift card is refunded, the gift card portion is returned to a new gift card issued to the account email within 24 hours and the remainder goes to the original payment method. Gift cards cannot be exchanged for cash except where required by law."
+    },
+    {
+      "id": "kb-escalation-policy",
+      "title": "When a case is escalated to a supervisor",
+      "tags": ["escalation", "supervisor", "complaint", "legal"],
+      "body": "Cases are escalated to a supervisor when any of the following apply: the customer has contacted support three or more times about the same unresolved issue; the customer states an intention to pursue legal action, a chargeback, or regulatory complaint; the requested remedy exceeds $500 in value; the request falls outside published policy and requires an exception; or the customer explicitly asks to speak to a manager. Escalated cases receive a response from a supervisor within one business day. Agents must not promise remedies outside published policy; the escalation exists precisely so that exceptions are authorised by someone empowered to grant them. Escalation is recorded with the ticket number and a short reason."
+    },
+    {
+      "id": "kb-business-orders",
+      "title": "Business and bulk orders",
+      "tags": ["business", "bulk", "invoice", "NET-30", "B2B", "quantity"],
+      "body": "Orders of ten or more units of the same item, or any order requiring a purchase order, custom invoicing, or NET payment terms, are handled by the Business Sales team rather than consumer support. Consumer support agents cannot issue quotes, set up NET-30 terms, apply tax-exempt status, or create purchase-order billing. Business Sales offers volume pricing above 25 units, dedicated account management, and consolidated invoicing. Standard consumer returns policy does not apply to business orders, which are governed by the terms in the signed business account agreement. Requests of this type should be escalated to Business Sales with the customer's company name, requested quantity, and terms."
+    }
+  ]
+}

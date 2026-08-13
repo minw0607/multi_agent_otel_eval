@@ -1,0 +1,35 @@
+{
+  "_comment": "Internal, authoritative policy documents. Distinct from the customer-facing KB: the Navigator retrieves KB articles to draft a reply, while the Validator checks the draft against these policies. This two-source structure makes plan-execution divergence and verification value measurable.",
+  "policies": [
+    {
+      "id": "policy-refunds",
+      "topic": "refunds",
+      "title": "Refund authorisation limits",
+      "body": "Agents may authorise refunds up to $500 without approval. Refunds between $500 and $2,000 require supervisor approval. Above $2,000 requires manager approval. Refunds must always be issued to the original payment method; agents may not issue store credit in place of a refund unless the customer requests it. Shipping charges are refunded only when the return results from a NorthPeak error, a defect, or damage on arrival. Agents must never state a posting date earlier than 8 business days from warehouse receipt, because the issuing bank controls final posting and NorthPeak cannot guarantee it."
+    },
+    {
+      "id": "policy-warranty",
+      "topic": "warranty",
+      "title": "Warranty claim handling",
+      "body": "The 12-month manufacturer warranty is independent of the 30-day return window. Agents must not refuse a defect claim on the grounds that the return window has closed; a fault reported between day 31 and day 365 is a valid warranty claim. The default remedies under warranty are repair or replacement, chosen by NorthPeak. A refund may be offered under warranty only when a replacement is unavailable and repair is not economical, and it requires supervisor approval. Accidental damage is never covered by the manufacturer warranty and must be routed to NorthPeak Care if the customer holds a plan."
+    },
+    {
+      "id": "policy-escalation",
+      "topic": "escalation",
+      "title": "Mandatory escalation triggers",
+      "body": "Escalation is mandatory, not discretionary, when any trigger is met: a third or later contact on the same unresolved issue; any mention of legal action, chargeback, or a regulatory or ombudsman complaint; a requested remedy exceeding $500; any request requiring an exception to published policy; an explicit request for a manager; or any business, bulk, or purchase-order enquiry. When a trigger is met the agent must escalate even if they believe they could resolve the case, and must not offer a remedy first. The escalation record must state the trigger that applied."
+    },
+    {
+      "id": "policy-international",
+      "topic": "international",
+      "title": "International order handling",
+      "body": "International orders to Canada and Mexico carry a 45-day return window rather than 30 days. Duties and taxes collected by the carrier are never refundable by NorthPeak and agents must not promise their recovery. Refunds on international orders cover merchandise value only. Replacements for damaged international orders ship by standard international service and cannot be expedited. Warranty service is mail-in depot only; agents must not offer carry-in or on-site service to international customers. Where an international order is also damaged on arrival, the damage process governs the remedy and the international policy governs what is refundable."
+    },
+    {
+      "id": "policy-communication",
+      "topic": "communication",
+      "title": "Drafting standards for customer replies",
+      "body": "Replies must state the specific policy that applies and the concrete next step the customer should take. Agents must not quote a timeline more optimistic than published policy. Agents must not invent order details, dates, or amounts that were not retrieved from the system of record; every factual claim about an order must come from a lookup. Where more than one policy applies, the reply must address each one rather than the most convenient. Replies must not promise remedies that require approval the agent does not hold."
+    }
+  ]
+}

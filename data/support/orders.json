@@ -1,0 +1,93 @@
+{
+  "_comment": "System-of-record order data. Read by read_order(); real file I/O. Dates are relative-day offsets from the run date so tickets stay valid over time: delivered_days_ago = N means delivery was N days before today.",
+  "orders": [
+    {
+      "order_id": "ORD-48210",
+      "customer": "R. Alvarez",
+      "items": [{"sku": "NP-MON-27U", "name": "27-inch 4K monitor", "qty": 1, "price": 389.00}],
+      "subtotal": 389.00,
+      "status": "Delivered",
+      "delivered_days_ago": 4,
+      "destination_country": "CA",
+      "payment_method": "Visa ****4417",
+      "care_plan": false
+    },
+    {
+      "order_id": "ORD-48355",
+      "customer": "M. Okafor",
+      "items": [{"sku": "NP-LAP-14P", "name": "14-inch Pro laptop", "qty": 1, "price": 1249.00}],
+      "subtotal": 1249.00,
+      "status": "Delivered",
+      "delivered_days_ago": 60,
+      "destination_country": "US",
+      "payment_method": "Mastercard ****9082",
+      "care_plan": false
+    },
+    {
+      "order_id": "ORD-48401",
+      "customer": "J. Whitfield",
+      "items": [{"sku": "NP-HPH-X3", "name": "Noise-cancelling headphones", "qty": 1, "price": 249.00}],
+      "subtotal": 249.00,
+      "status": "Received",
+      "delivered_days_ago": null,
+      "destination_country": "US",
+      "payment_method": "Visa ****2210",
+      "care_plan": true
+    },
+    {
+      "order_id": "ORD-48477",
+      "customer": "S. Nakamura",
+      "items": [{"sku": "NP-TAB-11", "name": "11-inch tablet", "qty": 1, "price": 529.00}],
+      "subtotal": 529.00,
+      "status": "Shipped",
+      "delivered_days_ago": null,
+      "destination_country": "US",
+      "payment_method": "Amex ****1005",
+      "care_plan": false
+    },
+    {
+      "order_id": "ORD-48502",
+      "customer": "D. Brennan",
+      "items": [{"sku": "NP-KBD-M1", "name": "Mechanical keyboard", "qty": 1, "price": 119.00}],
+      "subtotal": 119.00,
+      "status": "Delivered",
+      "delivered_days_ago": 9,
+      "destination_country": "US",
+      "payment_method": "Visa ****7731",
+      "care_plan": false
+    },
+    {
+      "order_id": "ORD-48566",
+      "customer": "P. Lindqvist",
+      "items": [{"sku": "NP-CAM-4K", "name": "4K action camera", "qty": 1, "price": 329.00}],
+      "subtotal": 329.00,
+      "status": "Delivered",
+      "delivered_days_ago": 6,
+      "destination_country": "US",
+      "payment_method": "Visa ****6690",
+      "care_plan": true
+    },
+    {
+      "order_id": "ORD-48610",
+      "customer": "A. Farouk",
+      "items": [{"sku": "NP-SSD-2T", "name": "2TB external SSD", "qty": 1, "price": 189.00}],
+      "subtotal": 189.00,
+      "status": "Delivered",
+      "delivered_days_ago": 11,
+      "destination_country": "US",
+      "payment_method": "Mastercard ****3348",
+      "care_plan": false
+    },
+    {
+      "order_id": "ORD-48688",
+      "customer": "T. Reyes",
+      "items": [{"sku": "NP-MON-32C", "name": "32-inch curved display", "qty": 1, "price": 649.00}],
+      "subtotal": 649.00,
+      "status": "Delivered",
+      "delivered_days_ago": 3,
+      "destination_country": "US",
+      "payment_method": "Visa ****8812",
+      "care_plan": false
+    }
+  ]
+}
