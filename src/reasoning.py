@@ -304,6 +304,10 @@ def reasoning_outcome_correlation(records: List[Dict[str, Any]]) -> Dict[str, An
         return {"correlation": None, "n": len(pairs),
                 "interpretation": "insufficient data (need at least 3 runs)"}
     c = _spearman(pairs)
+    if c is None:
+        return {"correlation": None, "n": len(pairs),
+                "interpretation": ("undefined — no variance in reasoning spend or in "
+                                   "outcome across these runs")}
     if c > 0.4:
         interp = "more reasoning spend tracks better outcomes — plausibly load-bearing"
     elif c < -0.1:

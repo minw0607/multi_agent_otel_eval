@@ -6,7 +6,7 @@ and return matplotlib Figure objects (or save them to disk).
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -294,6 +294,143 @@ def plot_baseline_vs_multi(df_baseline: pd.DataFrame, df_multi: pd.DataFrame,
            df_multi["total_cost"].mean(), "Avg Cost / Task ($)", "${:.4f}",
            higher_better=False)
 
+    plt.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=120, bbox_inches="tight")
+    return fig
+
+
+# ===========================================================================
+# Token attribution visuals (spec T7)
+# The trace tree shows structure; these show MASS — where the tokens went.
+# ===========================================================================
+
+_ATTR_COLORS = {
+    "System prompts":                    "#94A3B8",
+    "Tool definitions":                  "#F59E0B",
+    "Task / ticket":                     "#3B82F6",
+    "Retrieved knowledge (tool output)": "#2A9D8F",
+    "Conversation history":              "#8B5CF6",
+    "Unaccounted (residual)":            "#CBD5E1",
+    "Visible response":                  "#10B981",
+    "Hidden reasoning":                  "#EF4444",
+}
+
+
+def plot_token_attribution(source, save_path: Optional[Path] = None,
+                           title: str = "Token attribution") -> plt.Figure:
+    """
+    Horizontal decomposition of every token consumed, split INPUT vs OUTPUT.
+
+    Hidden reasoning is deliberately coloured red: it is the one category the
+    caller pays for and cannot read.
+    """
+    from .attribution import token_attribution
+    att = token_attribution(source)
+    rows = [r for r in att["rows"] if r.tokens != 0]
+
+    fig, ax = plt.subplots(figsize=(11, max(3.2, 0.52 * len(rows))))
+    labels = [f"{r.category}" for r in rows]
+    vals   = [r.tokens for r in rows]
+    colors = [_ATTR_COLORS.get(r.category, _COLORS["neutral"]) for r in rows]
+    hatch  = ["//" if r.method == "residual" else None for r in rows]
+
+    bars = ax.barh(range(len(rows)), vals, color=colors, alpha=0.9,
+                   edgecolor="white", linewidth=1.2)
+    for b, h in zip(bars, hatch):
+        if h:
+            b.set_hatch(h)
+
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels([f"{l}  [{r.dimension.lower()}]" for l, r in zip(labels, rows)], fontsize=9)
+    ax.invert_yaxis()
+    span = max(abs(v) for v in vals) or 1
+    for i, r in enumerate(rows):
+        off = span * 0.012
+        ax.text(r.tokens + (off if r.tokens >= 0 else -off), i,
+                f"{r.tokens:,} ({r.share:.0%}) · {r.method}",
+                va="center", ha="left" if r.tokens >= 0 else "right",
+                fontsize=8.5, color="#1E3A5F")
+    ax.axvline(0, color="#94A3B8", linewidth=1)
+    ax.margins(x=0.22)
+    _style_ax(ax, f"{title} — {att['total_tokens']:,} tokens total", "Tokens")
+    ax.text(0.99, -0.13,
+            f"residual {att['residual_tokens']:+,} ({att['residual_share']:.1%} of input) · "
+            f"{att['llm_calls']} LLM calls · hidden reasoning {att['hidden_share']:.0%} of output",
+            transform=ax.transAxes, ha="right", fontsize=8, color=_COLORS["neutral"])
+    plt.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=120, bbox_inches="tight")
+    return fig
+
+
+def plot_stage_bars(per_task: List[Dict], save_path: Optional[Path] = None) -> plt.Figure:
+    """
+    Stacked bar per task, coloured by workflow stage.
+
+    Args:
+        per_task: list of {"label": str, "stages": {stage_name: tokens}}
+    """
+    stage_colors = {
+        "Routing / orchestration": "#CBD5E1", "Planning": "#8B5CF6",
+        "Navigation & response": "#2A9D8F", "Verification": "#F59E0B",
+    }
+    labels = [t["label"] for t in per_task]
+    stages = list(stage_colors)
+    fig, ax = plt.subplots(figsize=(max(8, 0.75 * len(labels) + 3), 5))
+    bottom = [0.0] * len(per_task)
+    for st in stages:
+        vals = [t["stages"].get(st, 0) for t in per_task]
+        if not any(vals):
+            continue
+        ax.bar(labels, vals, bottom=bottom, label=st,
+               color=stage_colors[st], alpha=0.9, edgecolor="white", linewidth=0.8)
+        bottom = [b + v for b, v in zip(bottom, vals)]
+    ax.legend(fontsize=8.5, ncol=2, frameon=False)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    _style_ax(ax, "Tokens by workflow stage, per ticket", ylabel="Tokens")
+    plt.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=120, bbox_inches="tight")
+    return fig
+
+
+def plot_context_growth(source, save_path: Optional[Path] = None) -> plt.Figure:
+    """
+    Input context per navigator turn, split into what is NEW versus RE-SENT.
+
+    Every ReAct turn resends all prior turns, so the re-sent portion accumulates
+    while genuinely new information does not. This is usually the largest single
+    cost driver in long agent runs and the one readers do not predict.
+    """
+    from .attribution import context_growth
+    g = context_growth(source)
+    turns = [t for t in g["turns"] if t["agent"] == "navigator"] or g["turns"]
+    if not turns:
+        fig, ax = plt.subplots(figsize=(8, 3))
+        ax.text(0.5, 0.5, "No per-call spans found", ha="center", va="center")
+        return fig
+
+    idx    = list(range(1, len(turns) + 1))
+    schema = [t["tool_schema_tokens"] for t in turns]
+    resent = [t["history_tokens"] + t["tool_output_tokens"] for t in turns]
+    other  = [max(t["input_tokens"] - s - r, 0) for t, s, r in zip(turns, schema, resent)]
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(idx, schema, label="Tool definitions (resent every turn)",
+           color="#F59E0B", alpha=0.9, edgecolor="white")
+    ax.bar(idx, resent, bottom=schema, label="History + tool output (accumulating)",
+           color="#8B5CF6", alpha=0.9, edgecolor="white")
+    ax.bar(idx, other, bottom=[s + r for s, r in zip(schema, resent)],
+           label="New this turn", color="#2A9D8F", alpha=0.9, edgecolor="white")
+    ax.plot(idx, [t["input_tokens"] for t in turns], "o--", color="#1E3A5F",
+            linewidth=1.5, markersize=5, label="Total input")
+    ax.set_xticks(idx)
+    ax.legend(fontsize=8.5, frameon=False)
+    _style_ax(ax, f"Input context per navigator turn — {g['growth_factor']:.1f}x growth",
+              "Turn", "Input tokens")
+    ax.text(0.99, -0.14, f"{g['resent_share']:.0%} of all navigator input was re-sent context",
+            transform=ax.transAxes, ha="right", fontsize=8.5, color=_COLORS["neutral"])
     plt.tight_layout()
     if save_path:
         fig.savefig(save_path, dpi=120, bbox_inches="tight")

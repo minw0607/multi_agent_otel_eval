@@ -435,25 +435,45 @@ def reasoning_vs_complexity(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _spearman(pairs) -> float:
+def _spearman(pairs) -> Optional[float]:
+    """
+    Spearman rank correlation with **tie-corrected (mid) ranks**.
+
+    Naive ranking assigns distinct ranks to equal values, which manufactures
+    correlation out of nothing: three tickets of identical difficulty would
+    rank 1,2,3 and produce a spurious -1.0 against any varying series.
+    Returns None when either series has no variance, because a correlation is
+    undefined there rather than zero.
+    """
     def rank(vals):
         order_idx = sorted(range(len(vals)), key=lambda i: vals[i])
         r = [0.0] * len(vals)
-        for pos, i in enumerate(order_idx):
-            r[i] = pos + 1
+        i = 0
+        while i < len(order_idx):
+            j = i
+            while j + 1 < len(order_idx) and vals[order_idx[j + 1]] == vals[order_idx[i]]:
+                j += 1
+            mid = (i + j) / 2 + 1          # average rank for the tied block
+            for k in range(i, j + 1):
+                r[order_idx[k]] = mid
+            i = j + 1
         return r
+
     xs, ys = [p[0] for p in pairs], [p[1] for p in pairs]
+    if len(set(xs)) < 2 or len(set(ys)) < 2:
+        return None                        # undefined, not zero
     rx, ry = rank(xs), rank(ys)
     n = len(pairs)
     mx, my = sum(rx) / n, sum(ry) / n
     num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
     den = (sum((a - mx) ** 2 for a in rx) * sum((b - my) ** 2 for b in ry)) ** 0.5
-    return num / den if den else 0.0
+    return num / den if den else None
 
 
 def _interpret_corr(c: Optional[float]) -> str:
     if c is None:
-        return "insufficient data"
+        return ("undefined — one of the series has no variance "
+                "(e.g. all tasks share a difficulty, or no reasoning was recorded)")
     if c > 0.4:
         return "reasoning scales with task difficulty — plausibly load-bearing"
     if c < -0.1:

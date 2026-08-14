@@ -29,4 +29,5 @@ from .reasoning import (plan_execution_divergence, reasoning_inventory,
                          verdict_consistency, reasoning_report,
                          reasoning_outcome_correlation)
 from .visualizer import (plot_eval_dashboard, plot_trace_tree, plot_telemetry_dashboard,
-                          plot_dataset_overview, plot_baseline_vs_multi)
+                          plot_dataset_overview, plot_baseline_vs_multi,
+                          plot_token_attribution, plot_stage_bars, plot_context_growth)
