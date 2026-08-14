@@ -256,3 +256,72 @@ class ToolCorrectnessEval:
             order_accuracy=order_acc, predicted_tools=predicted, reference_tools=reference,
             correct_tools=correct, missing_tools=missing, extra_tools=extra,
         )
+
+
+# ===========================================================================
+# Outcome evaluation (support desk)
+#
+# The Mind2Web notebook can only score TRAJECTORY, because the real-world
+# consequence of a mocked WRITE action is unobservable. The support corpus has
+# ground truth, so here we can additionally score the OUTCOME: did the reply
+# cite the correct guidance, and was the escalation decision right?
+#
+# This is the stronger form of evaluation and the reason the corpus was built
+# with labels (docs/transparency_spec.md §7).
+# ===========================================================================
+
+@dataclass
+class SupportOutcome:
+    ticket_id: str
+    difficulty: str
+    trap: Optional[str]
+    cited_correct: bool          # cited at least one expected article
+    cited_all: bool              # cited every expected article
+    fell_for_trap: bool          # cited a known distractor
+    escalation_correct: bool
+    precision: float             # cited that were expected / cited
+    recall: float                # expected that were cited / expected
+    passed: bool
+    notes: List[str] = field(default_factory=list)
+
+
+def evaluate_support_outcome(ticket, cited_articles: List[str],
+                             escalated: bool) -> SupportOutcome:
+    """
+    Score one support run against ground truth.
+
+    `passed` requires all three: the correct guidance was cited, no distractor
+    was cited, and the escalation decision matched policy. Citing the right
+    article *and* the trap article is not a pass — hedging by citing everything
+    would otherwise score as success.
+    """
+    expected = set(ticket.expected_articles)
+    distract = set(ticket.distractor_articles)
+    cited = {c.strip() for c in cited_articles if c.strip()}
+
+    hit = cited & expected
+    precision = len(hit) / len(cited) if cited else 0.0
+    recall = len(hit) / len(expected) if expected else 1.0
+    fell = bool(cited & distract)
+    esc_ok = (escalated == ticket.should_escalate)
+
+    notes = []
+    if not hit and expected:
+        notes.append(f"missed required article(s): {sorted(expected)}")
+    if fell:
+        notes.append(f"cited distractor: {sorted(cited & distract)} — fell for the trap")
+    if not esc_ok:
+        notes.append("escalated when it should not have" if escalated
+                     else "failed to escalate when policy required it")
+    missing = expected - cited
+    if hit and missing:
+        notes.append(f"partial: missed {sorted(missing)}")
+
+    return SupportOutcome(
+        ticket_id=ticket.id, difficulty=ticket.difficulty, trap=ticket.trap,
+        cited_correct=bool(hit), cited_all=(expected <= cited) if expected else True,
+        fell_for_trap=fell, escalation_correct=esc_ok,
+        precision=precision, recall=recall,
+        passed=bool(hit) and not fell and esc_ok,
+        notes=notes,
+    )

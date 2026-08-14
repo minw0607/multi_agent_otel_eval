@@ -55,6 +55,13 @@ class Config:
     NAVIGATOR_MODEL  = os.environ.get("NAVIGATOR_MODEL",  AGENT_MODEL)
     VALIDATOR_MODEL  = os.environ.get("VALIDATOR_MODEL",  JUDGE_MODEL)
 
+    # Support-desk MAS defaults. The Planner runs a reasoning model on purpose:
+    # it is the stage where extended reasoning is most defensible AND most
+    # invisible, which makes it the transparency exhibit (spec §8).
+    SUPPORT_PLANNER_MODEL   = os.environ.get("SUPPORT_PLANNER_MODEL",   "o4-mini-20250416-gs")
+    SUPPORT_NAVIGATOR_MODEL = os.environ.get("SUPPORT_NAVIGATOR_MODEL", AGENT_MODEL)
+    SUPPORT_VALIDATOR_MODEL = os.environ.get("SUPPORT_VALIDATOR_MODEL", JUDGE_MODEL)
+
     AGENT_TEMPERATURE = float(os.environ.get("AGENT_TEMPERATURE", "0.3"))
     JUDGE_TEMPERATURE = float(os.environ.get("JUDGE_TEMPERATURE", "0.0"))
     AGENT_MAX_TOKENS  = int(os.environ.get("AGENT_MAX_TOKENS", "2000"))
@@ -80,16 +87,27 @@ class Config:
         "gpt-5-input":         2.50,  "gpt-5-output":        10.00,  # placeholder
         "gpt-4-input":        30.00,  "gpt-4-output":        60.00,
         "gpt-3.5-turbo-input": 0.50,  "gpt-3.5-turbo-output": 1.50,
+        # o-series reasoning models. NOTE: reasoning tokens are billed as
+        # OUTPUT tokens and are already included in `output_tokens`, so no
+        # separate line is needed — but it means output cost on these models
+        # is dominated by text the caller never sees.
+        "o4-mini-input":       1.10,  "o4-mini-output":       4.40,
+        "o3-mini-input":       1.10,  "o3-mini-output":       4.40,
+        "o3-pro-input":       20.00,  "o3-pro-output":       80.00,
+        "o3-input":            2.00,  "o3-output":            8.00,
+        "o1-input":           15.00,  "o1-output":           60.00,
     }
 
     # Families ordered MOST-SPECIFIC first so e.g. "gpt-4-1-..." resolves to
-    # gpt-4.1 ($2/$8) and never to legacy gpt-4 ($30/$60).
+    # gpt-4.1 ($2/$8) and never to legacy gpt-4 ($30/$60), and "o3-mini-..."
+    # resolves to o3-mini rather than o3.
     _COST_FAMILY_ORDER = [
         "gpt-4o-mini", "gpt-4o",
         "gpt-4.1-mini", "gpt-4.1",
         "gpt-5",
         "gpt-4",
         "gpt-3.5-turbo",
+        "o4-mini", "o3-mini", "o3-pro", "o3", "o1",
     ]
 
     # =========================================================================
