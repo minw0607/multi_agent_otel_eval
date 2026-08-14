@@ -29,7 +29,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from .config import Config
-from .otel import (LLMCallRecorder, Usage, estimated_usage, tool_schema_tokens)
+from .otel import (LLMCallRecorder, Usage, estimated_usage,
+                   measure_tool_schema_tokens, tool_schema_tokens)
 from .support_dataset import SupportTicket
 from .support_tools import get_support_tools
 from .tracer import (GEN_AI_ATTRIBUTES as A, SPAN_NAMES, HierarchicalTracer,
@@ -122,11 +123,21 @@ class SupportRunResult:
 # Build
 # ---------------------------------------------------------------------------
 
-def create_support_mas(config: Config = None, allowlist: List[str] = None) -> Dict:
-    """Build the support MAS. Each specialist gets its own model (spec §8)."""
+def create_support_mas(config: Config = None, allowlist: List[str] = None,
+                       measure_schema: bool = True) -> Dict:
+    """
+    Build the support MAS. Each specialist gets its own model (spec §8).
+
+    `measure_schema=True` spends two tiny calls to measure the real tool-schema
+    cost instead of estimating it from JSON. Worth it: the JSON estimate runs
+    ~1.4x high, and since schemas are the single largest input bucket that error
+    otherwise dominates the residual.
+    """
     cfg = config or Config
     tools = get_support_tools(allowlist)
     nav_llm = cfg.create_llm(role="agent", model=cfg.SUPPORT_NAVIGATOR_MODEL)
+    schema_tokens = (measure_tool_schema_tokens(nav_llm, tools) if measure_schema
+                     else tool_schema_tokens(tools))
     return {
         "planner":   cfg.create_llm(role="agent", model=cfg.SUPPORT_PLANNER_MODEL),
         "navigator": nav_llm,
@@ -134,7 +145,7 @@ def create_support_mas(config: Config = None, allowlist: List[str] = None) -> Di
         "navigator_agent": create_react_agent(nav_llm, tools, checkpointer=MemorySaver(),
                                               prompt=NAVIGATOR_PROMPT),
         "tools": tools,
-        "tool_schema_tokens": tool_schema_tokens(tools),
+        "tool_schema_tokens": schema_tokens,
         "models": {
             "supervisor": None,
             "planner":   cfg.SUPPORT_PLANNER_MODEL,

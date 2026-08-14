@@ -443,9 +443,13 @@ class LLMCallRecorder(_BaseCB):
 
 def tool_schema_tokens(tools) -> int:
     """
-    Tokens consumed by tool/function definitions, which are resent on EVERY
-    turn. Measured at 1,104 tokens for the 11 Mind2Web tools versus a 77-token
-    system prompt — a 14x ratio that is invisible in standard accounting.
+    ESTIMATE of the tokens consumed by tool/function definitions, which are
+    resent on EVERY turn.
+
+    Caveat, measured: tokenizing the OpenAI-format JSON overstates the real cost
+    by roughly 1.4x, because the provider does not bill the JSON exactly as we
+    serialise it. Prefer `measure_tool_schema_tokens()` when an LLM is available;
+    this remains the offline fallback.
     """
     try:
         import json as _json, tiktoken
@@ -454,3 +458,40 @@ def tool_schema_tokens(tools) -> int:
         return len(enc.encode(_json.dumps([convert_to_openai_tool(t) for t in tools])))
     except Exception:
         return 0
+
+
+_SCHEMA_CACHE: Dict[tuple, int] = {}
+
+
+def measure_tool_schema_tokens(llm, tools, use_cache: bool = True) -> int:
+    """
+    MEASURE the true cost of binding these tools, empirically.
+
+    Sends the same trivial message twice — once bare, once with tools bound —
+    and takes the difference in reported `input_tokens`. That difference *is*
+    the schema cost, as the provider bills it.
+
+    This replaces an estimate with a measurement. It is not calibration against
+    the residual: the residual is still computed and reported afterwards, and
+    will remain non-zero (per-message framing is still estimated). Measuring the
+    largest bucket simply stops one known systematic error from dominating it.
+
+    Costs two tiny calls (~500 tokens total), cached per (model, tool set).
+    Falls back to the tiktoken estimate if the calls fail.
+    """
+    key = (getattr(llm, "model_name", None) or getattr(llm, "deployment_name", "?"),
+           tuple(sorted(t.name for t in tools)))
+    if use_cache and key in _SCHEMA_CACHE:
+        return _SCHEMA_CACHE[key]
+    try:
+        from langchain_core.messages import HumanMessage
+        probe = [HumanMessage(content="Reply with the single word OK.")]
+        bare = llm.invoke(probe).usage_metadata["input_tokens"]
+        bound = llm.bind_tools(tools).invoke(probe).usage_metadata["input_tokens"]
+        measured = max(bound - bare, 0)
+        if measured:
+            _SCHEMA_CACHE[key] = measured
+            return measured
+    except Exception:
+        pass
+    return tool_schema_tokens(tools)
