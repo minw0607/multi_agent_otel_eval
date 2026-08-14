@@ -2,502 +2,212 @@
 
 <div align="center">
 
-**A provider-agnostic GenAI observability & evaluation framework benchmarked on Mind2Web**
+**See what your AI agents did, prove they did it right, and account for every token.**
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/minw0607/multi_agent_otel_eval/blob/main/agentic_otel_demo_notebook.ipynb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-GenAI%20SemConv-425CC7?logo=opentelemetry)](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
-[![Azure OpenAI](https://img.shields.io/badge/Azure-OpenAI-0078D4?logo=microsoftazure)](docs/provider-setup.md)
-[![OpenAI](https://img.shields.io/badge/OpenAI-Compatible-412991?logo=openai)](docs/provider-setup.md)
-[![Ollama](https://img.shields.io/badge/Ollama-Local-black)](docs/provider-setup.md)
-[![Project: Independent & Personal](https://img.shields.io/badge/Project-Independent%20%26%20Personal-lightgrey)](#disclaimer)
+[![LangChain](https://img.shields.io/badge/LangChain-LangGraph-1C3C3C)](https://langchain.com)
+[![Provider agnostic](https://img.shields.io/badge/LLM-provider--agnostic-412991)](docs/provider-setup.md)
 
-*Plug in any OpenAI-compatible LLM and run a rigorous, observable evaluation of single- and multi-agent web-navigation systems —*  
-*OpenTelemetry-compliant tracing · hybrid rule + LLM-judge scoring · tool-correctness metrics · cost & health monitoring · safety validation*
+*A provider-agnostic framework for evaluating and instrumenting multi-agent LLM systems —*
+*OpenTelemetry tracing · token attribution · reasoning transparency · audit-grade reporting*
 
 </div>
 
-> **Status:** Independent personal research project
+---
+
+## Two notebooks, two questions
+
+| Notebook | Question it answers | Benchmark |
+|---|---|---|
+| **[`agentic_otel_demo_notebook.ipynb`](agentic_otel_demo_notebook.ipynb)** | *How well does the agent perform, and can I see what it did?* | [Mind2Web](https://osu-nlp-group.github.io/Mind2Web/) web navigation |
+| **[`token_transparency_notebook.ipynb`](token_transparency_notebook.ipynb)** ⭐ | *Where did every token go, and how much of it can anyone see?* | Customer-support desk (real tools) |
+
+Both run on the same `src/` package. The notebooks stay deliberately coding-light — every
+component lives in `src/`, so each notebook reads as a narrative rather than a script.
 
 ---
 
-## What This Demo Showcases
+## What makes this different
 
-As autonomous agents move into production, two questions become mission-critical:
-**can you see what the agent did (observability), and can you prove it did the right
-thing (evaluation)?** This demo is an end-to-end showcase of both, applied to a
-**multi-agent** web-navigation system on a real benchmark.
+**1. Token attribution, not just token counting.** Every agent API reports a total. This
+one reports **where the tokens went** — system prompts, tool definitions you never used,
+retrieved documents, conversation history re-sent for the tenth time, and reasoning the
+model performed and billed you for but never showed you.
 
-- **Observability** — Every agent decision, LLM call, and tool invocation is captured
-  as an OpenTelemetry-compliant span. The result is a portable, audit-ready trace tree
-  you can ship to Datadog, Splunk, Phoenix, or Langfuse — the same instrumentation
-  pattern you'd use to monitor agents in production.
-- **Evaluation** — A hybrid scoring engine (deterministic rules + LLM-as-judge),
-  tool-selection correctness metrics, and safety validation quantify *how well* each
-  agent performed — not just whether it finished.
-- **Multi-agent architecture** — A supervisor pattern (Planner → Navigator → Validator)
-  is benchmarked head-to-head against a single-agent baseline, so you can see what
-  orchestration buys you in quality, cost, and traceability.
-- **Audit-grade reporting** — A one-call generator turns the run into a structured
-  Markdown report (executive summary, scope & compliance, section-by-section results,
-  conclusion, audit trail) — deterministic by default, with optional LLM narratives
-  clearly labeled **🤖 AI Assessment**. [See a sample →](docs/sample_evaluation_report.md)
+**2. Reasoning transparency.** A multi-agent architecture externalizes reasoning that a
+single reasoning-model call hides. We capture the plan and the rationale, then check them
+against the trace — deterministically, without asking an LLM whether the reasoning "looks
+good."
 
-The notebook is deliberately **coding-light**: every component lives in `src/`, so the
-notebook reads as a clean narrative of the observability-and-evaluation workflow.
+**3. Honest provenance on every number.** Each figure carries how it was obtained
+(`api` / `estimated` / `residual`) and how far it can be trusted (`verified` / `trusted` /
+`asserted`). When our decomposition disagrees with the provider's total, the **residual is
+printed, not hidden**.
+
+**4. Real OpenTelemetry.** Not OTLP-shaped JSON — the actual SDK, auto-instrumenting
+LangChain, exportable to Phoenix, Datadog, Jaeger, or Langfuse.
+
+**5. Provider-agnostic.** Azure OpenAI, OpenAI, Ollama, Groq, Together, LM Studio. No
+vendor assumptions in the code or in the output.
 
 ---
 
-## Sample Results
+## Results
 
-A 10-task run (single agent vs. multi-agent system) with **real API token/cost
-accounting** — your numbers will vary by model and sample, but the pattern is
-representative.
+### Where the tokens actually went
 
-**Single-Agent vs. Multi-Agent System** — the multi-agent system lifted the pass rate
-substantially, at a measurable cost/latency premium:
+A 15-ticket support-desk run: **114,462 tokens, 87 LLM calls, $0.34.**
 
-![Single vs Multi comparison](docs/baseline_vs_multi.png)
+![Token attribution](docs/token_attribution.png)
 
-| Metric | Single Agent | Multi-Agent | Rating |
+| Finding | Number |
+|---|---|
+| **Tool definitions** — resent every turn, whether used or not | **23.7%** of all tokens |
+| Retrieved knowledge (tool output) | 27.1% |
+| Conversation history re-sent | 6.8% |
+| **Hidden reasoning** — billed, never returned | **33% of all output** |
+| Residual (decomposition vs. reported total) | **+2.1%**, disclosed |
+
+Nearly a quarter of every token went to *re-declaring tools*, most of which the agent
+never called. That is invisible in any per-request total, and it is directly actionable.
+
+### Hidden reasoning is a model choice, not a workload property
+
+![Hidden reasoning](docs/hidden_reasoning.png)
+
+The planner runs a reasoning model; the other agents don't. You pay for the red.
+
+### Single-agent vs. multi-agent
+
+On Mind2Web, orchestration bought a real quality gain at a modest cost premium:
+
+| Metric | Single agent | Multi-agent | |
 |---|---|---|---|
-| Pass rate | 60% | **100%** | 🟢 High |
-| Avg task score | 0.697 | **0.809** | 🟢 High |
-| Tool F1 | 0.399 | **0.462** | 🟡 Medium |
-| Avg cost / task | $0.0346 | $0.0414 (**1.2×**) | 🟢 High |
-| Median latency | 8.3 s | 19.5 s | 🟡 Medium |
-| Safety | 100% | 100% | 🟢 High |
-| **Overall** | | | **🟢 High** |
-
-*(Cost reflects real API usage — counting every ReAct round-trip, not just the final
-output. Latency is the median, robust to occasional API stalls.)*
-
-**OpenTelemetry trace tree** — every task is a hierarchical span tree
-(`task.execute → planner → navigator → tool.execute → validator`) with per-agent cost,
-exported to OTLP JSON:
-
-![Multi-agent OTel trace tree](docs/mas_trace_tree.png)
-
-**Evaluation dashboard** — score distribution, pass/fail, tool-F1, and cost-vs-latency:
-
-![Evaluation dashboard](docs/mas_eval_dashboard.png)
-
-> 📄 These visuals come straight from the framework. See the full **[sample evaluation
-> report →](docs/sample_evaluation_report.md)** (Markdown) or the **[HTML executive
-> summary →](docs/sample_executive_summary.html)** for the complete write-up.
-
----
-
-## Why This Framework
-
-Most agent evaluation toolkits answer one question: *"Did the agent complete the task?"*
-
-This framework answers **five** — and captures an OpenTelemetry-compliant trace that tells you *how*:
-
-| Question | How |
-|---|---|
-| Did the agent **complete** the task? | Hybrid rule-based + LLM-as-judge score |
-| Did it pick the **right tools**? | Precision / recall / F1 with flexible tool-equivalence mapping |
-| Is it **safe**? | PII, injection, harmful-content, and budget-violation checks |
-| What does it **cost** to run? | Per-call token + cost tracking, agent vs. judge separation |
-| Is it **healthy** over time? | Rolling-window success rate, latency percentiles, drift detection |
-
-> **Novel contributions:** The full OpenTelemetry GenAI Semantic Convention span tree (portable to Datadog, Splunk, Phoenix, Langfuse) and the flexible tool-equivalence mapping are purpose-built for production agent observability — not found in standard evaluation toolkits.
-
----
-
-## At a Glance
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                       Agent Evaluation Pipeline                              │
-├──────────┬─────────────────┬──────────────────────────┬──────────────────────┤
-│  DATA    │     AGENTS      │       EXECUTION          │      EVALUATION       │
-│          │                 │                          │                       │
-│ Mind2Web │ Single ReAct    │ Hybrid real/mock tools   │ Hybrid score          │
-│ web-nav  │ + multi-agent   │ OTel span tracing        │ (rule + LLM judge)    │
-│ benchmark│ supervisor      │ token + cost tracking    │ Tool correctness F1   │
-│ (NeurIPS │ (planner /      │ health monitoring        │ Safety validation     │
-│  2023)   │  navigator /    │                          │ Cost & latency        │
-│          │  validator)     │                          │ Audit-ready traces    │
-└──────────┴─────────────────┴──────────────────────────┴──────────────────────┘
-```
-
----
-
-## OpenTelemetry-Compliant Tracing
-
-Every agent, LLM call, and tool invocation creates a **span** that follows the
-[OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
-Spans form a parent-child tree and export to **OTLP JSON** — portable to any
-observability backend (Datadog, Splunk, Phoenix, Langfuse, Jaeger).
-
-```
-task.execute                                  ← root span
-├── agent.planner.plan          (gen_ai.agent.role = task_decomposer)
-├── agent.navigator.execute     (gen_ai.agent.role = executor)
-│   ├── tool.execute            (gen_ai.tool.name = site_search)
-│   ├── tool.execute            (gen_ai.tool.name = filter_content)
-│   └── tool.execute            (gen_ai.tool.name = site_navigation)
-└── agent.validator.validate    (gen_ai.evaluation.score = 0.82)
-```
-
-Standard attributes captured per span: `gen_ai.system`, `gen_ai.request.model`,
-`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.agent.name`,
-`gen_ai.tool.name`, `gen_ai.usage.cost_usd`, plus custom evaluation extensions.
-
-### Two tracing modes
-
-| Mode | What it does | When |
-|---|---|---|
-| **Local (default)** | `HierarchicalTracer` records the span tree to JSONL + the offline trace-tree chart — zero extra dependencies | Always on |
-| **Real OTel → Phoenix** | `setup_phoenix()` registers the **OpenTelemetry SDK** and **auto-instruments LangChain/LangGraph** (OpenInference), streaming live spans to [Arize Phoenix](https://phoenix.arize.com) or any OTLP backend (Datadog, Jaeger, Grafana Tempo, Langfuse) | One optional call |
-
-```python
-from src import setup_phoenix
-setup_phoenix()                                  # local Phoenix UI at :6006
-setup_phoenix(endpoint="http://collector:4317")  # or any OTLP collector
-```
-
-**Real token & cost.** Token counts come from **actual API usage metadata**
-(LangChain usage callbacks) whenever the provider returns it, falling back to a
-tiktoken estimate otherwise — the `tokens_source` field records which was used, so
-cost figures are honest rather than guessed.
-
-📖 **New to OTel or want to wire up a specific backend?** See the
-**[Observability Guide →](docs/observability.md)** — a systematic walkthrough of
-OpenTelemetry concepts, how this framework emits spans, how to read a trace, and
-step-by-step setup for **Phoenix, Jaeger, Grafana Tempo, Datadog, Splunk, Langfuse,**
-and the generic OpenTelemetry Collector.
-
----
-
-## Evaluation Metrics
-
-### 🎯 Task Completion (HybridEvaluator)
-
-| Component | Method | Weight |
-|---|---|---|
-| **Length adequacy** | ≥ 40 words in the plan | 0.2 (rule) |
-| **Specificity** | Contains numeric detail | 0.1 (rule) |
-| **Goal alignment** | Task ↔ plan keyword overlap | 0.3 (rule) |
-| **Structured format** | Uses action verbs (CLICK, TYPE, …) | 0.2 (rule) |
-| **Action overlap** | Plan verbs ↔ reference verbs | 0.2 (rule) |
-| **LLM judge** | Holistic 0.0–1.0 quality rating | 0.6 (total) |
-
-`total_score = 0.4 × rule_score + 0.6 × llm_score` (weights configurable)
-
-### 🛠️ Tool Correctness (ToolCorrectnessEval)
-
-| Metric | Method |
-|---|---|
-| **Precision / Recall / F1** | Predicted vs. reference tools, flexible equivalence |
-| **Exact Match** | No missing or extra tools |
-| **Order Accuracy** | Longest common subsequence vs. reference order |
-
-> **Flexible tool equivalence** recognizes that Mind2Web's basic action set
-> (CLICK, TYPE) maps to the agent's richer toolset — `site_navigation ≈ site_search ≈
-> filter_content` for navigation, `site_search ≈ web_search` for search.
-
-### 🛡️ Safety (SafetyValidator)
-
-| Check | Detects |
-|---|---|
-| **PII** | SSN, credit card, email, phone |
-| **Injection** | XSS, SQL injection, code injection |
-| **Harmful content** | Jailbreak / bypass / exploit keywords |
-| **Financial** | Prices exceeding a stated budget |
-
----
-
-## Single-Agent vs. Multi-Agent System (the core story)
-
-The demo runs the **same tasks** through two architectures and puts the trade-off
-side by side — *when is orchestration worth it?*
-
-| Architecture | Pattern | Specialists | Models |
-|---|---|---|---|
-| **Single Agent** | One ReAct loop with all tools | 1 | `AGENT_MODEL` |
-| **Multi-Agent System** | Supervisor → Planner → Navigator → Validator | 4 | per-role (configurable) |
-
-In the **MAS**, work is divided: the **Planner** decomposes the task, the
-**Navigator** executes it with tools, and the **Validator** independently checks the
-result. This decomposition tends to **lift task quality on complex, multi-step
-tasks** — at the cost of more tokens and latency (4 LLM roles vs. 1).
-
-Each specialist gets its **own model** (set `PLANNER_MODEL`, `NAVIGATOR_MODEL`,
-`SUPERVISOR_MODEL`, `VALIDATOR_MODEL` in `.env`) and its **own OTel span** with
-per-agent cost attribution. The notebook produces a comparison table, a 3-panel
-chart, and an auto-generated interpretation of which system won and why.
-
-> **Takeaway:** simple lookups favor the single agent; complex, multi-step tasks
-> favor the MAS. The framework lets you measure exactly where that line is for
-> *your* tasks and models.
-
----
-
-## Audit-Grade Reporting
-
-The final step generates a structured Markdown **evaluation report** (`src/report.py`)
-suitable for model-risk review:
-
-```
-evaluation_report_<timestamp>.md
-├── 1. Executive Summary        — key findings & observations
-├── 2. Testing Scope            — what we test · Mind2Web data · regulations & compliance
-├── 3. Testing Approach         — hybrid sandbox method · scoring stack · judge model
-├── 4. Testing Results          — section-by-section assessment + embedded visualization
-│      4.1 Task completion   4.2 Tool correctness   4.3 Safety
-│      4.4 Cost & performance 4.5 Single-vs-multi   4.6 Observability
-├── 5. Conclusion               — recommendation from the cost/quality trade-off
-└── 6. Appendices               — artifacts · per-task audit trail · AI disclosure
-```
-
-**Hybrid, audit-safe assessment.** All tables, metrics, pass/fail decisions, and the
-audit trail are computed **deterministically** (rule-based) and are audit-safe.
-
-**Selective LLM judge (default-on, used only when needed).** The LLM judge is enabled
-by default but invoked **only where deterministic interpretation is genuinely
-ambiguous** — borderline scores, mixed cost/quality trade-offs, or safety violations.
-Clear-cut sections stay rule-based, which is cheaper, faster, and fully reproducible.
-Every LLM narrative is labeled **🤖 AI Assessment** with a disclosure notice, so LLM
-inference is never confused with the deterministic record (mapping to NIST AI RMF
-transparency).
-
-```python
-generate_report(..., use_llm=True,  llm_selective=True)   # default — AI only when ambiguous
-generate_report(..., use_llm=True,  llm_selective=False)  # AI narrative on every section
-generate_report(..., use_llm=False)                       # fully deterministic, no LLM calls
-```
-
-Findings are numbered (**F1–F7**) in the Executive Summary and **cross-referenced**
-from each results section, so a reviewer can trace every headline claim back to its
-underlying metric and assessment. Each finding carries a **🟢 High / 🟡 Medium /
-🔴 Low rating**, and the report rolls these up into a single **overall testing rating**
-(from task completion, quality, and safety). Model names render as friendly labels
-(e.g. `GPT 5-4 (Azure)`), not raw deployment IDs.
-
-📥 **[Download a sample report →](docs/sample_evaluation_report.md)** (with embedded
-charts) to see the full output before running anything.
-
----
-
-## Hybrid Real + Mock Tool Environment
-
-The industry-standard approach for **safe** pre-deployment agent evaluation:
-
-```
-READ tools     (real when API keys present, mock fallback)
-  web_search · site_search · get_price_info · check_availability
-  site_navigation · filter_content · get_page_info
-
-WRITE tools    (ALWAYS mocked — no real-world side effects)
-  book_reservation · make_phone_call · submit_form · make_purchase
-
-COMPUTE        (always real)
-  budget_calculator
-```
-
-This balances **rigor** (real agent behavior, real web data via Tavily) with
-**safety** (no real bookings, purchases, or form submissions). Set `TAVILY_API_KEY`
-to enable live web search; without it, READ tools return realistic mock data.
-
-### How do you score task completion if the WRITE actions are mocked?
-
-This is the central methodological question. Ideally you'd judge an agent by the
-**real-world consequence** of its actions — *"book a flight" → the airline confirms a
-seat exists under the passenger's name.* That is **outcome-based** evaluation, and it's
-the gold standard. But in a sandbox we **cannot (and must not)** produce those
-consequences: executing real bookings, purchases, and form submissions during testing
-would spend money, contact real businesses, and create real obligations — for thousands
-of test tasks. So the true end-state is unobservable by design.
-
-Instead, this framework uses **process-based (trajectory) evaluation** — it judges the
-*chain of actions the agent took toward the goal*, not the unobservable outcome:
-
-| Signal | What it checks | Answers |
-|---|---|---|
-| **Tool correctness** (`ToolCorrectnessEval`) | The sequence of tools the agent actually called (from the trace) vs. the gold `action_reprs` sequence — precision, recall, F1, and LCS order accuracy | *Did it take the right steps, in a sensible order?* |
-| **Rule-based plan checks** (`HybridEvaluator`) | Goal-keyword alignment, action verbs, specificity, overlap with the reference actions | *Does the plan actually address the task?* |
-| **LLM-as-judge** | Holistic 0–1 quality of the plan against the task + reference | *Would this trajectory plausibly complete the task?* |
-| **Mock confirmations** | WRITE tools return realistic simulated responses (e.g. `BOOK-REST-4821`), so the agent's *reaction* to success/failure is still exercised | *Does it handle the outcome correctly and stop?* |
-
-In short: **a task "passes" when the agent demonstrates the correct workflow** — locate →
-navigate → filter → invoke the right WRITE tool with the right arguments — as verified
-against the Mind2Web reference trajectory and judged for coherence. We measure
-*"did it do the right things"* as a **proxy** for *"did the real outcome occur."*
-
-**What this proxy does and doesn't tell you:**
-
-- ✅ Catches wrong tool choices, missing/extra steps, out-of-order actions, misread
-  goals, budget violations, and unsafe behavior — before any real deployment.
-- ⚠️ Cannot confirm the transaction *actually* succeeded end-to-end. A plausible,
-  correctly-sequenced trajectory could still fail against the live system (stale UI,
-  sold-out inventory, downstream validation). Process fidelity is necessary but not
-  sufficient for real success.
-
-This trade-off — real agent behavior + mocked side effects + trajectory scoring — is the
-**industry-standard pattern for pre-deployment agent evaluation**. Closing the last gap
-(observing real outcomes) requires a controlled live-execution harness — e.g. a Playwright
-browser sandbox against a staging site — which is a deliberate next step, kept out of the
-default demo precisely because it reintroduces real-world side effects.
+| Pass rate | 60% | **100%** | 🟢 |
+| Avg task score | 0.697 | **0.809** | 🟢 |
+| Cost / task | $0.0346 | $0.0414 (1.2×) | 🟡 |
+| Median latency | 8.3 s | 19.5 s | 🟡 |
+
+📄 **[Sample evaluation report](docs/sample_evaluation_report.md)** · **[HTML executive summary](docs/sample_executive_summary.html)**
 
 ---
 
 ## Quickstart
 
-> **Recommended: run locally with Jupyter.** This demo is designed to run on your
-> own machine. The reference Azure OpenAI setup uses **IP-allowlist access** (no
-> interactive login), which is the smoothest path for uninterrupted evaluation
-> runs — but it means **Google Colab will not work with Azure** (Colab's Google
-> Cloud IPs are not on corporate allowlists). Colab remains available for users
-> who bring a non-Azure provider (OpenAI, Groq, Together, etc.).
-
-### Option A — Local Setup (recommended)
-
-#### 1. Clone and install
-
 ```bash
 git clone https://github.com/minw0607/multi_agent_otel_eval.git
 cd multi_agent_otel_eval
 pip install -r requirements.txt
+cp .env.example .env          # add your provider credentials
+jupyter notebook token_transparency_notebook.ipynb
 ```
 
-#### 2. Configure your LLM provider
+The provider is auto-detected: set `OPENAI_API_VERSION` for Azure OpenAI, leave it blank
+for OpenAI / Ollama / Groq / any compatible endpoint. Full setup for each provider is in
+**[docs/provider-setup.md](docs/provider-setup.md)**.
 
-```bash
-cp .env.example .env
-# Edit .env — uncomment the section for your provider and fill in credentials
+> **Running locally is recommended.** The reference Azure setup uses IP-allowlist access
+> (no interactive login), which keeps evaluation runs uninterrupted but means Colab
+> cannot reach it. Colab works fine with any IP-independent provider.
+
+Optional — stream live traces to a real backend:
+
+```python
+from src import setup_phoenix
+setup_phoenix()      # Phoenix UI at http://localhost:6006
 ```
-
-The provider is **auto-detected** from `OPENAI_API_VERSION`:
-- **Set** (e.g. `2025-04-01-preview`) → Azure OpenAI (`AzureChatOpenAI`)
-- **Blank** → OpenAI direct, Ollama, Groq, or any compatible endpoint (`ChatOpenAI`)
-
-See [docs/provider-setup.md](docs/provider-setup.md) for step-by-step instructions per provider.
-
-#### 3. Run the demo notebook
-
-```bash
-jupyter notebook agentic_otel_demo_notebook.ipynb
-```
-
-Run cells in order. The Mind2Web dataset streams from HuggingFace on first run and
-caches locally — subsequent runs skip the download.
 
 ---
 
-### Option B — Google Colab (non-Azure providers only)
+## How it works
 
-> ⚠️ **Not compatible with the reference Azure OpenAI setup** (IP allowlisting blocks
-> Colab). Use this only with OpenAI, Groq, Together, or another IP-independent provider.
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│  DATA              AGENTS                EXECUTION           EVALUATION    │
+│                                                                            │
+│  Mind2Web       Single ReAct         Real + mock tools    Hybrid scoring   │
+│  benchmark      ── or ──             OTel span tracing    Tool correctness │
+│                 Multi-agent MAS      per-call token       Safety checks    │
+│  Support        supervisor →         attribution          Outcome vs       │
+│  corpus         planner →            reasoning capture    ground truth     │
+│  (real tools)   navigator →                               Audit report     │
+│                 validator                                                  │
+└───────────────────────────────────────────────────────────────────────────┘
+```
 
-Click the **Open in Colab** badge at the top of this README, then add your
-credentials as Colab Secrets (🔑 in the left sidebar) and run all cells:
+**The multi-agent system** is built with LangChain + LangGraph. Only the Navigator is a
+true ReAct graph; the Supervisor is deterministic routing that costs **zero tokens**, and
+the Planner and Validator are single model calls with role prompts. Each specialist can
+run a different model.
 
-| Secret name | Example value |
+**Instrumentation** attaches through LangChain callbacks, so every LLM call is recorded
+individually — which is what makes re-planning, per-turn context growth, and hidden
+reasoning observable at all.
+
+### Documentation
+
+| Guide | Covers |
 |---|---|
-| `OPENAI_API_KEY` | `sk-...` |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` |
-| `AGENT_MODEL` | `gpt-4o` |
-| `JUDGE_MODEL` | `gpt-4o` |
-| `TAVILY_API_KEY` | `tvly-...` *(optional — enables real web search)* |
-
-> Leave `OPENAI_API_VERSION` **unset** on Colab — it activates Azure mode, which won't connect.
+| **[Token & reasoning transparency](docs/transparency_spec.md)** | The methodology: invariants, provenance tiers, what's measurable and what isn't |
+| **[Observability](docs/observability.md)** | OpenTelemetry from first principles + setup for Phoenix, Jaeger, Tempo, Datadog, Splunk, Langfuse |
+| **[Evaluation](docs/evaluation.md)** | Metrics reference, trajectory vs. outcome scoring, tool environments, judge policy |
+| **[Provider setup](docs/provider-setup.md)** | Step-by-step for Azure, OpenAI, Ollama, Groq, Together, LM Studio |
 
 ---
 
-## Repo Structure
+## Repo structure
 
 ```
 multi_agent_otel_eval/
-├── README.md
-├── requirements.txt
-├── .env.example                    ← Copy to .env and fill in credentials (never committed)
-├── .gitignore
-├── LICENSE
+├── agentic_otel_demo_notebook.ipynb    ← evaluation + observability demo
+├── token_transparency_notebook.ipynb   ← ⭐ token & reasoning attribution
 │
-├── agentic_otel_demo_notebook.ipynb             ← ★ Start here — coding-light, all heavy lifting in src/
-├── Enhanced_Agentic_Framework_Multi_Agent.ipynb   ← Original monolithic research notebook
+├── src/
+│   ├── config.py            Provider-agnostic LLM factory, cost table
+│   ├── tracer.py            OTel spans, per-span provenance
+│   ├── otel.py              Real OTel export · Usage · per-call recorder
+│   ├── agents.py            Mind2Web single + multi-agent systems
+│   ├── support_agents.py    Support-desk MAS (real tools, instrumented)
+│   ├── support_tools.py     Real tools under an enforced sandbox contract
+│   ├── support_dataset.py   Labeled corpus + ground truth
+│   ├── attribution.py       Token attribution and derived metrics
+│   ├── reasoning.py         Plan–execution divergence, reasoning provenance
+│   ├── interpret.py         Rule-based chart interpretation
+│   ├── evaluator.py         Hybrid scoring, tool correctness, outcome eval
+│   ├── visualizer.py        Dashboards, trace trees, attribution charts
+│   ├── report.py            Audit-grade Markdown + HTML reports
+│   └── runner.py            Batch evaluation
 │
-├── src/                            ← Importable Python modules
-│   ├── config.py                   ← Provider-agnostic LLM factory, reads from .env
-│   ├── tracer.py                   ← Local OTel-shaped spans (HierarchicalTracer) + ExecutionTrace
-│   ├── otel.py                     ← Real OpenTelemetry → Phoenix + real token/cost callbacks
-│   ├── monitors.py                 ← CostTracker + HealthMonitor (rolling window)
-│   ├── safety.py                   ← PII, injection, harmful-content, budget checks
-│   ├── tools.py                    ← Hybrid real/mock web-navigation tools
-│   ├── dataset.py                  ← Mind2Web streaming loader with local cache
-│   ├── agents.py                   ← Baseline ReAct + multi-agent supervisor pipeline
-│   ├── runner.py                   ← evaluate_batch() — runs N tasks through either system
-│   ├── evaluator.py                ← HybridEvaluator + ToolCorrectnessEval
-│   ├── visualizer.py               ← Eval dashboard, trace tree, telemetry, comparison charts
-│   └── report.py                   ← Audit-grade Markdown report generator
-│
-├── docs/
-│   ├── provider-setup.md           ← Step-by-step setup for Azure, OpenAI, Ollama, Groq
-│   └── observability.md            ← OTel concepts + backend setup (Phoenix/Datadog/Jaeger/…)
-│
-└── outputs/                        ← Results, traces, charts, reports (gitignored)
-    ├── traces/                     ← OTLP JSON span exports
-    ├── data/                       ← Cached Mind2Web dataset
-    ├── baseline_vs_multi.png
-    ├── single_agent_*.csv / multi_agent_*.csv
-    └── evaluation_report_*.md      ← Audit-grade report
+├── data/support/            KB articles, policies, orders, labeled tickets
+├── docs/                    Guides (see table above)
+└── outputs/                 Results, traces, charts (gitignored)
 ```
-
----
-
-## Provider Compatibility
-
-The framework auto-detects your provider from `.env` — no code changes required.
-
-| `OPENAI_API_VERSION` | Provider | LangChain class |
-|---|---|---|
-| Set (e.g. `2025-04-01-preview`) | Azure OpenAI | `AzureChatOpenAI` |
-| Blank | OpenAI / Ollama / Groq / etc. | `ChatOpenAI` |
-
-**Supported providers:**
-
-| Provider | `OPENAI_BASE_URL` | Notes |
-|---|---|---|
-| **Azure OpenAI** | `https://<resource>.openai.azure.com` | Set `OPENAI_API_VERSION` |
-| **OpenAI (direct)** | `https://api.openai.com/v1` | Default |
-| **Ollama** (local) | `http://localhost:11434/v1` | Free, no API key |
-| **Groq** | `https://api.groq.com/openai/v1` | — |
-| **Together AI** | `https://api.together.xyz/v1` | — |
-| **LM Studio** | `http://localhost:1234/v1` | — |
-
-See [docs/provider-setup.md](docs/provider-setup.md) for step-by-step setup and troubleshooting.
-
----
-
-## About the Mind2Web Dataset
-
-[**Mind2Web**](https://osu-nlp-group.github.io/Mind2Web/) is the first large-scale
-benchmark for evaluating AI agents that perform web-navigation tasks from natural
-language instructions. Published at **NeurIPS 2023** (Spotlight) by The Ohio State
-University, it spans 2,000+ tasks across 137 real websites and 31 domains.
-
-This framework streams the lightweight text metadata (task descriptions, websites,
-reference action sequences) from the `osunlp/Multimodal-Mind2Web` HuggingFace
-dataset, skipping the heavy HTML and screenshot fields.
 
 ---
 
 ## Limitations
 
-- **LLM-as-judge bias**: When the agent and judge use the same model, self-evaluation biases toward higher scores. A separate judge model is preferable when budget allows — set `JUDGE_MODEL` to a different model.
-- **Hypothetical-plan scoring**: The evaluator scores the agent's *plan* (intended actions), not live browser execution. Mind2Web tasks run against mock/scraped data, not the live target site.
-- **Tool-equivalence mapping**: The flexible mapping is tuned for Mind2Web's basic action set. Custom toolsets may need their own equivalence rules in `evaluator.py`.
-- **Synchronous execution**: The evaluation loop is single-threaded. For large runs (>100 tasks), parallelise at the process level.
+- **Trajectory ≠ outcome.** The Mind2Web notebook scores the agent's *plan* against
+  reference actions; WRITE actions are mocked, so real consequences are unobservable by
+  design. The support desk closes part of this gap with ground truth. See
+  [docs/evaluation.md](docs/evaluation.md).
+- **We trust the vendor's token counts.** We verify context we assembled ourselves, but
+  cannot audit the provider's reported usage — hence the `trusted` tier.
+- **Hidden reasoning is only ever a number.** Size is reported; content is withheld. No
+  amount of instrumentation recovers it.
+- **Cost is an estimate even when tokens are exact.** Cache hits depend on state outside
+  your control, so identical requests can bill differently.
+- **This is the ceiling for a stack you own.** None of it audits a third-party agent — and
+  the distance between this ceiling and what commercial agents disclose *is* the
+  transparency gap.
+- **LLM-as-judge bias.** Use a different model for the judge than the agent, and calibrate
+  against human labels before trusting a judge score.
 
 ---
 
 ## Citation
-
-If you use this framework, please cite the Mind2Web benchmark:
 
 ```bibtex
 @inproceedings{deng2023mind2web,
@@ -509,31 +219,24 @@ If you use this framework, please cite the Mind2Web benchmark:
 }
 ```
 
-And the OpenTelemetry GenAI Semantic Conventions:
-
-```
-https://opentelemetry.io/docs/specs/semconv/gen-ai/
-```
+Aligned with the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
 
 ---
 
-<a id="disclaimer"></a>
-
 ## Disclaimer
 
-This repository is an independent personal project created outside of my employment using my own time and equipment.
-
-Unless explicitly stated otherwise, the code, notebooks, demonstrations, analyses, and documentation in this repository are developed independently, using only publicly available research papers, technical documentation, regulations, and other public sources. They do not rely on, incorporate, or disclose any confidential, proprietary, non-public, or client information obtained through my employment or professional engagements.
-
-The views, designs, implementations, and conclusions expressed in this repository are solely my own and do not represent the views of any employer, client, or affiliated organization.
-
-This repository is provided for research and educational purposes only.
+Research and evaluation framework. The support-desk corpus is synthetic; company names,
+policies, and orders in it are fictional. Numbers shown are from specific runs and will
+vary by model, provider, and sample. Nothing here constitutes a vendor audit.
 
 ---
 
 <div align="center">
 
-Made with ❤️ for rigorous, observable agent evaluation  
-[Open an issue](https://github.com/minw0607/multi_agent_otel_eval/issues) · [Provider setup](docs/provider-setup.md) · [Observability guide](docs/observability.md)
+[Open an issue](https://github.com/minw0607/multi_agent_otel_eval/issues) ·
+[Transparency spec](docs/transparency_spec.md) ·
+[Observability](docs/observability.md) ·
+[Evaluation](docs/evaluation.md) ·
+[Provider setup](docs/provider-setup.md)
 
 </div>
