@@ -99,18 +99,14 @@ def _finding_ratings(m_pass, m_sc, m_f1, cost_x, m_lat, safe_rate, overall) -> d
 
 def _pretty_model(name: str, cfg) -> str:
     """
-    Turn a raw deployment name into a friendly label, e.g.
-    'gpt-5-4-20260305-gs' → 'GPT 5-4 (Azure)', 'gpt-4o' → 'GPT 4o (OpenAI)'.
+    Friendly model label with provider, e.g. 'gpt-5-4 (Azure)'.
+
+    Delegates the name shortening to Config.display_model so it stays
+    provider-agnostic — no assumption that the model is a GPT, and internal
+    deployment ids never reach published output.
     """
-    import re
-    base = re.sub(r"-\d{6,8}", "", name)      # drop date stamp (e.g. -20260305)
-    base = re.sub(r"-gs$", "", base).strip("-")
-    parts = base.split("-")
-    if parts and parts[0].lower() == "gpt":
-        label = "GPT " + "-".join(parts[1:]) if len(parts) > 1 else "GPT"
-    else:
-        label = base
-    provider = "Azure" if getattr(cfg, "API_VERSION", "") else "OpenAI"
+    label = cfg.display_model(name)
+    provider = "Azure" if getattr(cfg, "API_VERSION", "") else "OpenAI-compatible"
     return f"{label} ({provider})"
 
 

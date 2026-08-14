@@ -132,21 +132,56 @@ class Config:
     # =========================================================================
     # LLM FACTORY
     # =========================================================================
+    # Name patterns that *hint* a model does hidden reasoning. This is a
+    # convenience heuristic only — see is_reasoning_model() for the caveat.
+    # Override for other providers, e.g. REASONING_MODEL_PATTERNS="^o\\d|deepseek-r|qwq"
+    REASONING_MODEL_PATTERNS = os.environ.get(
+        "REASONING_MODEL_PATTERNS", r"^o\d|reasoning|thinking|-r1\b|deepseek-r")
+
     @staticmethod
-    def is_reasoning_model(model: str) -> bool:
+    def display_model(model: str) -> str:
         """
-        True for OpenAI o-series reasoning models (o1, o3, o3-mini, o4-mini, …).
+        Short, human-readable model label — provider-agnostic.
 
-        These differ from chat models in two ways that matter here:
-          * they reject `temperature` and require `max_completion_tokens`
-          * they report `reasoning_tokens` — output tokens that are billed but
-            never returned to the caller (see docs/transparency_spec.md §2)
+        Strips deployment date stamps and environment suffixes without assuming
+        any particular vendor or family, so published output never leaks an
+        internal deployment id:
 
-        Matches a leading 'o' followed by a digit, so 'gpt-4o' (which contains
-        '4o', not 'o4') is correctly excluded.
+            gpt-5-4-20260305-gs        -> gpt-5-4
+            o4-mini-20250416-gs        -> o4-mini
+            claude-sonnet-4-5-20250929 -> claude-sonnet-4-5
+            llama-3.1-70b-versatile    -> llama-3.1-70b-versatile  (nothing to strip)
         """
         import re
-        return bool(re.match(r"^o\d", (model or "").strip().lower()))
+        if not model:
+            return "—"
+        s = str(model).strip()
+        s = re.sub(r"[-_](gs|prod|dev|test|preview|latest)$", "", s, flags=re.I)
+        s = re.sub(r"[-_]20\d{2}[-_]?\d{2}[-_]?\d{2}(?=$|[-_])", "", s)   # date stamp
+        s = re.sub(r"[-_](gs|prod|dev|test|preview|latest)$", "", s, flags=re.I)
+        return s.strip("-_") or str(model)
+
+    @classmethod
+    def is_reasoning_model(cls, model: str) -> bool:
+        """
+        Heuristic: does this model perform hidden internal reasoning?
+
+        A "reasoning model" generates an internal chain of thought before its
+        visible answer. Those thinking tokens are **billed as output tokens but
+        never returned to the caller** — you pay for text you cannot read. They
+        also usually reject `temperature` and require `max_completion_tokens`.
+
+        This check is name-based and therefore only a hint. **The authoritative
+        signal is behavioural**: if the API returns a non-zero
+        `reasoning_tokens` in its usage payload, the model is doing hidden
+        reasoning regardless of what it is called. Attribution always uses the
+        reported number, never this guess — so a false negative here costs
+        nothing but a label.
+
+        Extend for other providers via REASONING_MODEL_PATTERNS.
+        """
+        import re
+        return bool(re.search(cls.REASONING_MODEL_PATTERNS, (model or "").strip().lower()))
 
     @classmethod
     def create_llm(cls, role: str = "agent", model: str = None, **overrides):

@@ -436,3 +436,113 @@ def plot_context_growth(source, save_path: Optional[Path] = None) -> plt.Figure:
     if save_path:
         fig.savefig(save_path, dpi=120, bbox_inches="tight")
     return fig
+
+
+def plot_hidden_reasoning(source, save_path: Optional[Path] = None) -> plt.Figure:
+    """
+    Visible versus hidden output tokens, per agent.
+
+    The red portion is text the provider generated, charged for, and never
+    returned. Non-reasoning agents show a flat zero, which is the point of
+    comparison: the hidden slice is a property of the model choice, not of the
+    workload.
+    """
+    from .attribution import hidden_reasoning
+    h = hidden_reasoning(source)
+    agents = [a for a, d in h["by_agent"].items() if d["output"] > 0]
+    if not agents:
+        fig, ax = plt.subplots(figsize=(8, 3))
+        ax.text(0.5, 0.5, "No output tokens recorded", ha="center", va="center")
+        return fig
+
+    visible = [h["by_agent"][a]["output"] - h["by_agent"][a]["reasoning"] for a in agents]
+    hidden  = [h["by_agent"][a]["reasoning"] for a in agents]
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(13, 4.6),
+                                  gridspec_kw={"width_ratios": [1.6, 1]})
+    y = range(len(agents))
+    ax.barh(y, visible, color="#10B981", alpha=0.9, edgecolor="white", label="Visible output")
+    ax.barh(y, hidden, left=visible, color="#EF4444", alpha=0.9, edgecolor="white",
+            label="Hidden reasoning (billed, unreadable)")
+    ax.set_yticks(list(y)); ax.set_yticklabels(agents, fontsize=10); ax.invert_yaxis()
+    for i, a in enumerate(agents):
+        d = h["by_agent"][a]
+        if d["reasoning"]:
+            ax.text(d["output"] * 1.02, i, f"{d['hidden_share']:.0%} hidden",
+                    va="center", fontsize=9, color="#B91C1C", fontweight="bold")
+        else:
+            ax.text(d["output"] * 1.02, i, "none", va="center", fontsize=9,
+                    color=_COLORS["neutral"])
+    ax.legend(fontsize=8.5, loc="lower right", frameon=False)
+    ax.margins(x=0.22)
+    _style_ax(ax, "Output tokens by agent", "Tokens")
+
+    share = h["hidden_share"]
+    ax2.pie([1 - share, share], labels=["Visible", "Hidden"],
+            colors=["#10B981", "#EF4444"], autopct="%1.0f%%", startangle=90,
+            wedgeprops={"edgecolor": "white", "linewidth": 2},
+            textprops={"fontsize": 10, "fontweight": "bold"})
+    ax2.set_title(f"All output — {h['hidden_tokens']:,} of {h['output_tokens']:,} tokens\n"
+                  "billed but never returned",
+                  fontsize=10.5, fontweight="bold", color="#1E3A5F")
+    plt.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=120, bbox_inches="tight")
+    return fig
+
+
+def plot_tool_usage(source, save_path: Optional[Path] = None) -> plt.Figure:
+    """
+    Tool calls and the tokens their outputs contributed, with duplicates marked.
+
+    Duplicate calls are hatched: those are tokens paid for twice to obtain
+    information the agent already had.
+    """
+    from .attribution import _attrs, duplicate_retrievals, normalize_spans, tool_spans
+    spans = tool_spans(normalize_spans(source))
+    if not spans:
+        fig, ax = plt.subplots(figsize=(8, 3))
+        ax.text(0.5, 0.5, "No tool calls recorded", ha="center", va="center")
+        return fig
+
+    from collections import defaultdict
+    seen, calls, dup_calls, out_tokens, dup_tokens = set(), defaultdict(int), defaultdict(int), defaultdict(int), defaultdict(int)
+    for s in spans:
+        a = _attrs(s)
+        name = a.get("gen_ai.tool.name", "?")
+        key = (name, a.get("tool.args_fingerprint"))
+        tok = int(a.get("tool.output_tokens_est", 0) or 0)
+        calls[name] += 1
+        out_tokens[name] += tok
+        if key in seen:
+            dup_calls[name] += 1
+            dup_tokens[name] += tok
+        seen.add(key)
+
+    names = sorted(calls, key=lambda n: -out_tokens[n])
+    fresh = [out_tokens[n] - dup_tokens[n] for n in names]
+    dup   = [dup_tokens[n] for n in names]
+
+    fig, ax = plt.subplots(figsize=(10, max(3.2, 0.55 * len(names))))
+    y = range(len(names))
+    ax.barh(y, fresh, color=_COLORS["primary"], alpha=0.9, edgecolor="white",
+            label="First retrieval")
+    b = ax.barh(y, dup, left=fresh, color=_COLORS["danger"], alpha=0.85,
+                edgecolor="white", label="Duplicate (paid twice)")
+    for bar in b:
+        bar.set_hatch("//")
+    ax.set_yticks(list(y))
+    ax.set_yticklabels([f"{n}  ({calls[n]}x)" for n in names], fontsize=9)
+    ax.invert_yaxis()
+    for i, n in enumerate(names):
+        ax.text(out_tokens[n] * 1.02, i, f"{out_tokens[n]:,} tok", va="center",
+                fontsize=8.5, color="#1E3A5F")
+    d = duplicate_retrievals(source)
+    ax.legend(fontsize=8.5, frameon=False, loc="lower right")
+    ax.margins(x=0.2)
+    _style_ax(ax, f"Tool output tokens entering context — "
+                  f"{d['duplicate_calls']} duplicate of {d['total_calls']} calls", "Tokens")
+    plt.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=120, bbox_inches="tight")
+    return fig

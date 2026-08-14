@@ -20,6 +20,10 @@ from .support_agents import (create_support_mas, run_support_mas,
                               SupportRunResult)
 from . import attribution
 from . import reasoning
+from . import interpret
+from .interpret import (interpret_context_growth, interpret_hidden_reasoning,
+                         interpret_tool_usage, interpret_stage_bars,
+                         interpret_attribution, Interpretation)
 from .attribution import (token_attribution, stage_breakdown, context_growth,
                            tool_schema_overhead, duplicate_retrievals,
                            replanning_count, verification_share, retrieval_share,
@@ -30,4 +34,5 @@ from .reasoning import (plan_execution_divergence, reasoning_inventory,
                          reasoning_outcome_correlation)
 from .visualizer import (plot_eval_dashboard, plot_trace_tree, plot_telemetry_dashboard,
                           plot_dataset_overview, plot_baseline_vs_multi,
-                          plot_token_attribution, plot_stage_bars, plot_context_growth)
+                          plot_token_attribution, plot_stage_bars, plot_context_growth,
+                          plot_hidden_reasoning, plot_tool_usage)
