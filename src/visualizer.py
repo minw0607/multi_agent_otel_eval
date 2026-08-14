@@ -546,3 +546,79 @@ def plot_tool_usage(source, save_path: Optional[Path] = None) -> plt.Figure:
     if save_path:
         fig.savefig(save_path, dpi=120, bbox_inches="tight")
     return fig
+
+
+def plot_token_attribution_simple(source, save_path: Optional[Path] = None,
+                                  title: str = "Where an AI agent's tokens actually go",
+                                  subtitle: str = "") -> plt.Figure:
+    """
+    Presentation version of the attribution chart.
+
+    Same measured data as `plot_token_attribution`, but stripped for a general
+    audience: plain-language category names, no method/tier annotations, and the
+    residual folded out (shares renormalised over the remaining categories, so
+    they are approximate by a couple of percent).
+
+    Categories that tend to surprise people — tool definitions and hidden
+    reasoning — are highlighted; the rest are neutral, so the eye lands on the
+    finding rather than on the chart.
+
+    Use `plot_token_attribution` for anything audit-facing: it keeps the residual
+    and the provenance labels, which this deliberately drops.
+    """
+    from .attribution import token_attribution
+    att = token_attribution(source)
+
+    plain = {
+        "Tool definitions":                   ("Tool definitions  (re-sent every turn)", True),
+        "Retrieved knowledge (tool output)":  ("Retrieved documents", False),
+        "Task / ticket":                      ("The actual user request", False),
+        "System prompts":                     ("System instructions", False),
+        "Conversation history":               ("Conversation history  (re-sent)", False),
+        "Visible response":                   ("The answer you can read", False),
+        "Hidden reasoning":                   ("Reasoning you paid for but can't read", True),
+    }
+
+    rows = [(plain[r.category][0], r.tokens, plain[r.category][1])
+            for r in att["rows"] if r.category in plain and r.tokens > 0]
+    rows.sort(key=lambda x: -x[1])
+    total = sum(t for _, t, _ in rows) or 1
+
+    fig, ax = plt.subplots(figsize=(12, 6.8))
+    fig.patch.set_facecolor("white")
+    fig.subplots_adjust(top=0.80, left=0.34, right=0.93, bottom=0.10)
+
+    labels = [r[0] for r in rows]
+    vals   = [r[1] for r in rows]
+    colors = ["#E8833A" if r[2] else "#B7C3CE" for r in rows]
+
+    ax.barh(range(len(rows)), vals, color=colors, height=0.66, edgecolor="white")
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels(labels, fontsize=13, color="#1E3A5F")
+    ax.invert_yaxis()
+
+    # Hidden reasoning is small against ALL tokens but large against output —
+    # annotate the second denominator so the bar is not read as trivial.
+    out_total = sum(t for lbl, t, _ in rows
+                    if lbl.startswith(("The answer", "Reasoning you paid")))
+    for i, (lbl, v, hot) in enumerate(rows):
+        ax.text(v + total * 0.008, i, f"{v/total:.0%}", va="center", fontsize=15,
+                fontweight="bold", color="#E8833A" if hot else "#5A6B7B")
+        if lbl.startswith("Reasoning you paid") and out_total:
+            ax.text(v + total * 0.055, i,
+                    f"— but {v/out_total:.0%} of everything the model wrote",
+                    va="center", fontsize=11.5, color="#B5651D", style="italic")
+
+    ax.set_xticks([]); ax.set_xlabel("")
+    for side in ("top", "right", "bottom", "left"):
+        ax.spines[side].set_visible(False)
+    ax.margins(x=0.30)
+
+    fig.text(0.015, 0.945, title, fontsize=20, fontweight="bold", color="#1E3A5F")
+    sub = subtitle or (f"{att['total_tokens']:,} tokens from one multi-agent run"
+                       "   ·   highlighted: the parts nobody budgets for")
+    fig.text(0.015, 0.885, sub, fontsize=12, color="#5A6B7B")
+
+    if save_path:
+        fig.savefig(save_path, dpi=110, bbox_inches="tight", facecolor="white")
+    return fig
