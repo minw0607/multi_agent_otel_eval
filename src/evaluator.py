@@ -306,22 +306,33 @@ def evaluate_support_outcome(ticket, cited_articles: List[str],
     esc_ok = (escalated == ticket.should_escalate)
 
     notes = []
-    if not hit and expected:
-        notes.append(f"missed required article(s): {sorted(expected)}")
     if fell:
         notes.append(f"cited distractor: {sorted(cited & distract)} — fell for the trap")
     if not esc_ok:
         notes.append("escalated when it should not have" if escalated
                      else "failed to escalate when policy required it")
-    missing = expected - cited
-    if hit and missing:
-        notes.append(f"partial: missed {sorted(missing)}")
+
+    if ticket.should_escalate:
+        # Policy requires escalating INSTEAD of offering a remedy, so a correct
+        # run calls escalate and never calls draft_response — leaving nothing to
+        # cite. Demanding a citation here would penalise the correct behaviour,
+        # which is exactly what it did to T-1013 before this branch existed.
+        passed = esc_ok and not fell
+        if esc_ok and not cited:
+            notes.append("escalated without drafting — correct under escalation policy")
+    else:
+        passed = bool(hit) and not fell and esc_ok
+        if not hit and expected:
+            notes.append(f"missed required article(s): {sorted(expected)}")
+        missing = expected - cited
+        if hit and missing:
+            notes.append(f"partial: missed {sorted(missing)}")
 
     return SupportOutcome(
         ticket_id=ticket.id, difficulty=ticket.difficulty, trap=ticket.trap,
         cited_correct=bool(hit), cited_all=(expected <= cited) if expected else True,
         fell_for_trap=fell, escalation_correct=esc_ok,
         precision=precision, recall=recall,
-        passed=bool(hit) and not fell and esc_ok,
+        passed=passed,
         notes=notes,
     )

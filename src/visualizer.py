@@ -345,16 +345,17 @@ def plot_token_attribution(source, save_path: Optional[Path] = None,
     ax.set_yticklabels([f"{l}  [{r.dimension.lower()}]" for l, r in zip(labels, rows)], fontsize=9)
     ax.invert_yaxis()
     span = max(abs(v) for v in vals) or 1
+    off = span * 0.015
     for i, r in enumerate(rows):
-        off = span * 0.012
-        ax.text(r.tokens + (off if r.tokens >= 0 else -off), i,
-                f"{r.tokens:,} ({r.share:.0%}) · {r.method}",
-                va="center", ha="left" if r.tokens >= 0 else "right",
-                fontsize=8.5, color="#1E3A5F")
+        # Negative bars (the residual) get their label in the empty positive
+        # space to the right of zero, so it never collides with the axis labels.
+        x = (r.tokens + off) if r.tokens >= 0 else off
+        ax.text(x, i, f"{r.tokens:,} ({r.share:.0%}) · {r.method}",
+                va="center", ha="left", fontsize=8.5, color="#1E3A5F")
     ax.axvline(0, color="#94A3B8", linewidth=1)
-    ax.margins(x=0.22)
+    ax.margins(x=0.25)
     _style_ax(ax, f"{title} — {att['total_tokens']:,} tokens total", "Tokens")
-    ax.text(0.99, -0.13,
+    ax.text(0.99, -0.20,
             f"residual {att['residual_tokens']:+,} ({att['residual_share']:.1%} of input) · "
             f"{att['llm_calls']} LLM calls · hidden reasoning {att['hidden_share']:.0%} of output",
             transform=ax.transAxes, ha="right", fontsize=8, color=_COLORS["neutral"])
