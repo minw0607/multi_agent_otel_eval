@@ -115,17 +115,17 @@ decomposition also makes reasoning **auditable**, which Layer 2 exploits.
 
 ## Layer 2 — Token & reasoning transparency
 
-Layer 1 tells you a 15-ticket run cost **114,462 tokens and $0.34**. Layer 2 tells you
+Layer 1 tells you a 15-ticket run cost **114,506 tokens and $0.34**. Layer 2 tells you
 *where they went*:
 
 ![Token attribution](docs/token_attribution.png)
 
 | Finding | Number |
 |---|---|
-| **Tool definitions** — resent every turn, used or not | **23.7%** of all tokens |
-| Retrieved knowledge (tool output) | 27.1% |
+| **Tool definitions** — resent every turn, used or not | **23.6%** of all tokens |
+| Retrieved knowledge (tool output) | 27.3% |
 | Conversation history re-sent | 6.8% |
-| **Hidden reasoning** — billed, never returned | **33% of all output** |
+| **Hidden reasoning** — billed, never returned | **34% of all output** |
 | Residual (decomposition vs. reported total) | **+2.1%**, disclosed |
 
 Nearly a quarter of every token went to *re-declaring tools*, most never called. That is
@@ -137,12 +137,49 @@ reasoning model; the other agents don't. You pay for the red:
 ![Hidden reasoning](docs/hidden_reasoning.png)
 
 **Every number carries its provenance** — how it was obtained (`api` / `estimated` /
-`residual`) and how far it can be trusted (`verified` / `trusted` / `asserted`). When the
-decomposition disagrees with the provider's total, the **residual is printed, not hidden**.
+`residual`) and how far it can be **checked**:
+
+| Tier | Meaning |
+|---|---|
+| `verified` | We hold the content *and* counted it ourselves — fully re-checkable |
+| `trusted` | The vendor counted it, but we hold what it refers to, so it *could* be cross-checked |
+| `asserted` | The vendor counted it and the content is **withheld** — nothing exists to check against |
+
+The gap between `trusted` and `asserted` is **auditability, not confidence**: visible
+output can be re-tokenized, hidden reasoning cannot, because the text never arrives. When
+the decomposition disagrees with the provider's total, the **residual is printed, not
+hidden**.
 
 **Reasoning is checked, not read.** Chain-of-thought is often unfaithful, so the framework
 compares the planner's *stated* steps against the navigator's *actual* tool calls —
 deterministically, no judge required.
+
+### The instrument is stable; the agent is not
+
+Across four identical 15-ticket runs:
+
+| | Range across runs |
+|---|---|
+| Tool-definition share | **23.6 – 23.7%** |
+| Residual | **+2.1%** every run |
+| Total tokens | 114.5k ± 0.1k |
+| — | |
+| Agent pass rate | **67 – 87%** |
+| False escalations | 2 – 5 |
+
+Measurement reproduces to a tenth of a percentage point while agent behaviour swings
+twenty. That separation is the point of instrumenting: **variance you can see is variance
+you can manage.**
+
+### What outcome scoring caught that trajectory scoring wouldn't
+
+Every failure in every run was the same thing: **the agent escalated when policy said not
+to.** Across four runs — 2 to 5 false escalations, and **zero missed escalations**. The
+two tickets where the surface-level article gives the wrong answer fail *every* time.
+
+Trajectory scoring would pass these runs: the agent used sensible tools in a sensible
+order. Only checking the **outcome against ground truth** reveals a systematic,
+asymmetric bias — the agent punts when it detects ambiguity.
 
 📖 **[Methodology and what's measurable](docs/transparency_spec.md)**
 
