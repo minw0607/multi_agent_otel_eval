@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**See what your AI agents did, prove they did it right, and account for every token.**
+**Observability and evaluation for multi-agent LLM systems — from whole-run traces down to individual tokens.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -10,78 +10,94 @@
 [![LangChain](https://img.shields.io/badge/LangChain-LangGraph-1C3C3C)](https://langchain.com)
 [![Provider agnostic](https://img.shields.io/badge/LLM-provider--agnostic-412991)](docs/provider-setup.md)
 
-*A provider-agnostic framework for evaluating and instrumenting multi-agent LLM systems —*
-*OpenTelemetry tracing · token attribution · reasoning transparency · audit-grade reporting*
+*OpenTelemetry tracing · hybrid + outcome evaluation · safety validation · audit-grade reporting*
+*— and a token-level zoom-in that the same instrumentation makes possible*
 
 </div>
 
 ---
 
-## Two notebooks, two questions
+## The idea: one instrumentation, two depths
 
-| Notebook | Question it answers | Benchmark |
-|---|---|---|
-| **[`agentic_otel_demo_notebook.ipynb`](agentic_otel_demo_notebook.ipynb)** | *How well does the agent perform, and can I see what it did?* | [Mind2Web](https://osu-nlp-group.github.io/Mind2Web/) web navigation |
-| **[`token_transparency_notebook.ipynb`](token_transparency_notebook.ipynb)** ⭐ | *Where did every token go, and how much of it can anyone see?* | Customer-support desk (real tools) |
+Agent observability usually stops at the trace: *which steps ran, how long, what did they
+cost in total.* That answers most operational questions. But the moment you ask **"why did
+this cost 12,000 tokens?"**, a trace can't help — it reports totals, not composition.
+
+This framework instruments agents once, then reads that instrumentation at two depths:
+
+```
+┌─ LAYER 1 · Observability & Evaluation ─────────────────────────────────────┐
+│                                                                             │
+│   Did the agent do the job? Can I see what it did?                          │
+│                                                                             │
+│   OpenTelemetry span trees · hybrid rule + LLM-judge scoring                │
+│   tool-correctness metrics · safety validation · cost & latency             │
+│   single-agent vs multi-agent comparison · audit-grade reports              │
+│                                                                             │
+│      ┌─ LAYER 2 · Token & Reasoning Transparency ───────────────────┐       │
+│      │                                                              │       │
+│      │   Zoom in: where did each token actually go?                 │       │
+│      │                                                              │       │
+│      │   context composition · hidden reasoning · duplicate         │       │
+│      │   retrievals · plan-vs-execution faithfulness                │       │
+│      │   provenance tiers · residual reconciliation                 │       │
+│      │                                                              │       │
+│      └──────────────────────────────────────────────────────────────┘       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+Layer 2 isn't a separate tool — it's what becomes visible once every LLM call is recorded
+individually and every prompt's composition is captured at assembly time. **A backend can
+tell you a call used 4,312 input tokens. It cannot tell you 1,900 of them were tool
+definitions the agent never used**, because that has to be emitted while the prompt is
+being built, not recovered afterwards.
+
+### The two notebooks
+
+| Notebook | Layer | Question | Benchmark |
+|---|---|---|---|
+| **[`agentic_otel_demo_notebook.ipynb`](agentic_otel_demo_notebook.ipynb)** | 1 | *How well does the agent perform, and can I see what it did?* | [Mind2Web](https://osu-nlp-group.github.io/Mind2Web/) web navigation |
+| **[`token_transparency_notebook.ipynb`](token_transparency_notebook.ipynb)** | 2 | *Where did every token go, and how much of it can anyone see?* | Customer-support desk (real tools) |
 
 Both run on the same `src/` package. The notebooks stay deliberately coding-light — every
-component lives in `src/`, so each notebook reads as a narrative rather than a script.
+component lives in `src/`, so each reads as a narrative rather than a script.
 
 ---
 
-## What makes this different
+## Layer 1 — Observability & evaluation
 
-**1. Token attribution, not just token counting.** Every agent API reports a total. This
-one reports **where the tokens went** — system prompts, tool definitions you never used,
-retrieved documents, conversation history re-sent for the tenth time, and reasoning the
-model performed and billed you for but never showed you.
+**Every agent decision is an OpenTelemetry span.** Traces follow the
+[GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) and
+export as OTLP, so they drop into Phoenix, Datadog, Jaeger, Tempo, or Langfuse unchanged.
 
-**2. Reasoning transparency.** A multi-agent architecture externalizes reasoning that a
-single reasoning-model call hides. We capture the plan and the rationale, then check them
-against the trace — deterministically, without asking an LLM whether the reasoning "looks
-good."
+```
+task.execute
+├── agent.supervisor.route      (deterministic — 0 tokens)
+├── agent.planner.plan          gen_ai.agent.role = task_decomposer
+├── agent.navigator.execute     gen_ai.agent.role = tool_executor
+│   ├── llm.chat.completion     per-call usage, context composition
+│   └── tool.execute            gen_ai.tool.name, output size, fingerprints
+└── agent.validator.validate    gen_ai.evaluation.score
+```
 
-**3. Honest provenance on every number.** Each figure carries how it was obtained
-(`api` / `estimated` / `residual`) and how far it can be trusted (`verified` / `trusted` /
-`asserted`). When our decomposition disagrees with the provider's total, the **residual is
-printed, not hidden**.
+![Multi-agent trace tree](docs/mas_trace_tree.png)
 
-**4. Real OpenTelemetry.** Not OTLP-shaped JSON — the actual SDK, auto-instrumenting
-LangChain, exportable to Phoenix, Datadog, Jaeger, or Langfuse.
+**Evaluation answers five questions**, not just "did it finish":
 
-**5. Provider-agnostic.** Azure OpenAI, OpenAI, Ollama, Groq, Together, LM Studio. No
-vendor assumptions in the code or in the output.
-
----
-
-## Results
-
-### Where the tokens actually went
-
-A 15-ticket support-desk run: **114,462 tokens, 87 LLM calls, $0.34.**
-
-![Token attribution](docs/token_attribution.png)
-
-| Finding | Number |
+| Question | How |
 |---|---|
-| **Tool definitions** — resent every turn, whether used or not | **23.7%** of all tokens |
-| Retrieved knowledge (tool output) | 27.1% |
-| Conversation history re-sent | 6.8% |
-| **Hidden reasoning** — billed, never returned | **33% of all output** |
-| Residual (decomposition vs. reported total) | **+2.1%**, disclosed |
+| Did it **complete** the task? | Hybrid rule-based + LLM-as-judge score |
+| Did it pick the **right tools**? | Precision / recall / F1 against reference actions |
+| Is it **safe**? | PII, injection, harmful-content, budget checks |
+| What did it **cost**? | Real per-call token + cost accounting, agent vs. judge split |
+| Is it **healthy** over time? | Rolling success rate, latency percentiles, drift |
 
-Nearly a quarter of every token went to *re-declaring tools*, most of which the agent
-never called. That is invisible in any per-request total, and it is directly actionable.
+### Does orchestration pay for itself?
 
-### Hidden reasoning is a model choice, not a workload property
+The framework runs single-agent and multi-agent systems over identical tasks:
 
-![Hidden reasoning](docs/hidden_reasoning.png)
-
-The planner runs a reasoning model; the other agents don't. You pay for the red.
-
-### Single-agent vs. multi-agent
-
-On Mind2Web, orchestration bought a real quality gain at a modest cost premium:
+![Single vs multi-agent](docs/baseline_vs_multi.png)
 
 | Metric | Single agent | Multi-agent | |
 |---|---|---|---|
@@ -90,7 +106,45 @@ On Mind2Web, orchestration bought a real quality gain at a modest cost premium:
 | Cost / task | $0.0346 | $0.0414 (1.2×) | 🟡 |
 | Median latency | 8.3 s | 19.5 s | 🟡 |
 
+Real quality gain, modest cost premium — and, less obviously, the multi-agent
+decomposition also makes reasoning **auditable**, which Layer 2 exploits.
+
 📄 **[Sample evaluation report](docs/sample_evaluation_report.md)** · **[HTML executive summary](docs/sample_executive_summary.html)**
+
+---
+
+## Layer 2 — Token & reasoning transparency
+
+Layer 1 tells you a 15-ticket run cost **114,462 tokens and $0.34**. Layer 2 tells you
+*where they went*:
+
+![Token attribution](docs/token_attribution.png)
+
+| Finding | Number |
+|---|---|
+| **Tool definitions** — resent every turn, used or not | **23.7%** of all tokens |
+| Retrieved knowledge (tool output) | 27.1% |
+| Conversation history re-sent | 6.8% |
+| **Hidden reasoning** — billed, never returned | **33% of all output** |
+| Residual (decomposition vs. reported total) | **+2.1%**, disclosed |
+
+Nearly a quarter of every token went to *re-declaring tools*, most never called. That is
+invisible in any per-request total, and it is immediately actionable.
+
+**Hidden reasoning is a model choice, not a workload property.** The planner runs a
+reasoning model; the other agents don't. You pay for the red:
+
+![Hidden reasoning](docs/hidden_reasoning.png)
+
+**Every number carries its provenance** — how it was obtained (`api` / `estimated` /
+`residual`) and how far it can be trusted (`verified` / `trusted` / `asserted`). When the
+decomposition disagrees with the provider's total, the **residual is printed, not hidden**.
+
+**Reasoning is checked, not read.** Chain-of-thought is often unfaithful, so the framework
+compares the planner's *stated* steps against the navigator's *actual* tool calls —
+deterministically, no judge required.
+
+📖 **[Methodology and what's measurable](docs/transparency_spec.md)**
 
 ---
 
@@ -101,16 +155,16 @@ git clone https://github.com/minw0607/multi_agent_otel_eval.git
 cd multi_agent_otel_eval
 pip install -r requirements.txt
 cp .env.example .env          # add your provider credentials
-jupyter notebook token_transparency_notebook.ipynb
+jupyter notebook agentic_otel_demo_notebook.ipynb
 ```
 
-The provider is auto-detected: set `OPENAI_API_VERSION` for Azure OpenAI, leave it blank
-for OpenAI / Ollama / Groq / any compatible endpoint. Full setup for each provider is in
+Provider is auto-detected: set `OPENAI_API_VERSION` for Azure OpenAI, leave blank for
+OpenAI / Ollama / Groq / any compatible endpoint. Per-provider setup:
 **[docs/provider-setup.md](docs/provider-setup.md)**.
 
-> **Running locally is recommended.** The reference Azure setup uses IP-allowlist access
-> (no interactive login), which keeps evaluation runs uninterrupted but means Colab
-> cannot reach it. Colab works fine with any IP-independent provider.
+> **Run locally.** The reference Azure setup uses IP-allowlist access (no interactive
+> login), which keeps evaluation runs uninterrupted but means Colab cannot reach it. Colab
+> works fine with any IP-independent provider.
 
 Optional — stream live traces to a real backend:
 
@@ -143,16 +197,15 @@ the Planner and Validator are single model calls with role prompts. Each special
 run a different model.
 
 **Instrumentation** attaches through LangChain callbacks, so every LLM call is recorded
-individually — which is what makes re-planning, per-turn context growth, and hidden
-reasoning observable at all.
+individually — which is precisely what makes Layer 2 possible.
 
 ### Documentation
 
 | Guide | Covers |
 |---|---|
-| **[Token & reasoning transparency](docs/transparency_spec.md)** | The methodology: invariants, provenance tiers, what's measurable and what isn't |
 | **[Observability](docs/observability.md)** | OpenTelemetry from first principles + setup for Phoenix, Jaeger, Tempo, Datadog, Splunk, Langfuse |
 | **[Evaluation](docs/evaluation.md)** | Metrics reference, trajectory vs. outcome scoring, tool environments, judge policy |
+| **[Token & reasoning transparency](docs/transparency_spec.md)** | Layer 2 methodology: invariants, provenance tiers, what's measurable and what isn't |
 | **[Provider setup](docs/provider-setup.md)** | Step-by-step for Azure, OpenAI, Ollama, Groq, Together, LM Studio |
 
 ---
@@ -161,8 +214,8 @@ reasoning observable at all.
 
 ```
 multi_agent_otel_eval/
-├── agentic_otel_demo_notebook.ipynb    ← evaluation + observability demo
-├── token_transparency_notebook.ipynb   ← ⭐ token & reasoning attribution
+├── agentic_otel_demo_notebook.ipynb    ← Layer 1: evaluation + observability
+├── token_transparency_notebook.ipynb   ← Layer 2: token & reasoning attribution
 │
 ├── src/
 │   ├── config.py            Provider-agnostic LLM factory, cost table
@@ -172,10 +225,10 @@ multi_agent_otel_eval/
 │   ├── support_agents.py    Support-desk MAS (real tools, instrumented)
 │   ├── support_tools.py     Real tools under an enforced sandbox contract
 │   ├── support_dataset.py   Labeled corpus + ground truth
+│   ├── evaluator.py         Hybrid scoring, tool correctness, outcome eval
 │   ├── attribution.py       Token attribution and derived metrics
 │   ├── reasoning.py         Plan–execution divergence, reasoning provenance
 │   ├── interpret.py         Rule-based chart interpretation
-│   ├── evaluator.py         Hybrid scoring, tool correctness, outcome eval
 │   ├── visualizer.py        Dashboards, trace trees, attribution charts
 │   ├── report.py            Audit-grade Markdown + HTML reports
 │   └── runner.py            Batch evaluation
@@ -234,9 +287,9 @@ vary by model, provider, and sample. Nothing here constitutes a vendor audit.
 <div align="center">
 
 [Open an issue](https://github.com/minw0607/multi_agent_otel_eval/issues) ·
-[Transparency spec](docs/transparency_spec.md) ·
 [Observability](docs/observability.md) ·
 [Evaluation](docs/evaluation.md) ·
+[Transparency](docs/transparency_spec.md) ·
 [Provider setup](docs/provider-setup.md)
 
 </div>
