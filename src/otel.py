@@ -136,10 +136,20 @@ class Usage:
                           o-series models (docs/transparency_spec.md §2).
 
     `source` records whether counts came from the API or a tokenizer estimate.
-    `tier` records how much the number can be trusted (spec invariant I3):
-      verified  — we counted it ourselves from content we assembled
-      trusted   — the vendor reported it; we cannot audit it
-      asserted  — reported but uninspectable (reasoning tokens)
+    `tier` records how far the number can be CHECKED (spec invariant I3). The
+    distinction is whether the thing being counted can be inspected at all:
+
+      verified  — we hold the content AND computed the count ourselves, so it
+                  is fully re-checkable (e.g. a system prompt we wrote).
+      trusted   — the vendor computed the count, but we hold the content it
+                  refers to, so it could be cross-checked in principle. We
+                  don't audit it, but a referent exists (e.g. visible output).
+      asserted  — the vendor computed the count and the content is WITHHELD.
+                  Nothing exists to check it against, even in principle — the
+                  number is the entire artifact (e.g. reasoning tokens).
+
+    So trusted vs asserted is not a difference of confidence but of
+    auditability: one has a referent you could examine, the other has none.
     """
     input_tokens: int = 0
     output_tokens: int = 0

@@ -118,9 +118,13 @@ Every figure carries **how it was obtained**: `api` | `estimated` | `derived` | 
 
 | Tier | Example | Meaning |
 |---|---|---|
-| **Verified** | Context composition, tool schemas, history | We can independently count it — we built the prompt |
-| **Trusted** | `input_tokens` / `output_tokens` | We accept the vendor's number; we cannot audit it |
-| **Asserted** | `reasoning_tokens` | Reported but uninspectable — only its claimed size is known |
+| **Verified** | Context composition, tool schemas, history | We hold the content *and* counted it ourselves — fully re-checkable |
+| **Trusted** | `input_tokens` / `output_tokens` | Vendor counted it, but we hold the content it refers to, so it could be cross-checked in principle |
+| **Asserted** | `reasoning_tokens` | Vendor counted it and the content is **withheld** — nothing exists to check against, even in principle |
+
+The line between *trusted* and *asserted* is **auditability, not confidence**: one
+has a referent you could examine, the other has none. Visible output can be
+re-tokenized; hidden reasoning cannot, because the text never arrives.
 
 We can verify the context we constructed; we take the vendor's word on what it cost.
 Saying so is what makes this more credible than vendor reporting, not less.
