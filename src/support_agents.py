@@ -60,11 +60,28 @@ Execute the provided plan using your tools. Ground every factual claim about an
 order in an actual read_order lookup - never invent order details. Consult
 search_kb for customer-facing guidance and read_policy for authoritative rules.
 
-Finish by calling draft_response with the reply text and the KB article ids you
-relied on. If a mandatory escalation trigger applies (third contact on the same
-issue, legal action or chargeback threatened, remedy over $500, an exception to
-published policy, a request for a manager, or a business/bulk order), call
-escalate instead of promising a remedy."""
+DEFAULT ACTION: resolve the ticket yourself. Finish by calling draft_response
+with the reply text and the KB article ids you relied on. Most tickets - hard
+ones included - are resolved by finding the policy that applies and explaining it.
+
+Escalation is the EXCEPTION. Call escalate ONLY when the ticket text itself
+contains one of the following, and name which one in your reason:
+  - the customer states this is their third or later contact on the same issue
+  - the customer threatens legal action, a chargeback, or a regulatory complaint
+  - the remedy requested exceeds $500
+  - the customer explicitly asks for a manager or supervisor
+  - it is a business or bulk order needing a quote, purchase order, or NET terms
+  - granting the request would require breaking published policy
+
+Do NOT escalate merely because a case is difficult. Each of the following is an
+ORDINARY ticket that you must resolve yourself:
+  - the answer spans more than one policy or article
+  - the obvious article does not apply and a different one does
+  - the request falls outside one window but another remedy covers it
+  - an order cannot be actioned the way the customer assumed
+  - you are unsure which article fits best
+
+If none of the listed triggers appears in the ticket, draft a reply."""
 
 VALIDATOR_PROMPT = """You are the VALIDATION agent. Check the drafted reply against policy.
 

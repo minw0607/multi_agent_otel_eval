@@ -171,15 +171,37 @@ Measurement reproduces to a tenth of a percentage point while agent behaviour sw
 twenty. That separation is the point of instrumenting: **variance you can see is variance
 you can manage.**
 
-### What outcome scoring caught that trajectory scoring wouldn't
+### Measure → diagnose → fix → re-measure
 
-Every failure in every run was the same thing: **the agent escalated when policy said not
-to.** Across four runs — 2 to 5 false escalations, and **zero missed escalations**. The
-two tickets where the surface-level article gives the wrong answer fail *every* time.
+Outcome scoring surfaced a bias that trajectory scoring would have passed, and the fix
+closed the loop.
 
-Trajectory scoring would pass these runs: the agent used sensible tools in a sensible
-order. Only checking the **outcome against ground truth** reveals a systematic,
-asymmetric bias — the agent punts when it detects ambiguity.
+**What it caught.** Across four runs, *every* failure was the same thing: the agent
+escalated when policy said not to — 2 to 5 false escalations per run, and **zero missed
+escalations**. Perfectly asymmetric. Trajectory scoring passes these runs happily; the
+agent used sensible tools in a sensible order. Only checking outcomes against ground
+truth exposed it.
+
+**The diagnosis.** Not a model failure — a prompt failure. The navigator prompt listed
+the escalation triggers prominently while never stating that resolving the ticket is the
+default. The agent learned to escalate whenever a case looked *difficult*, which is a
+different thing from a trigger being present.
+
+**The fix.** State that drafting is the default action, require the agent to name which
+specific trigger appears in the ticket text, and enumerate the difficult-but-ordinary
+cases it must handle itself (answer spans two policies, the obvious article doesn't
+apply, an order can't be actioned as assumed).
+
+| | Before | After |
+|---|---|---|
+| Pass rate | 67 – 87% | **93%** |
+| False escalations | 2 – 5 | **1** |
+| Missed escalations | 0 | **0** |
+
+The zero in the last row matters: the fix removed false positives without introducing
+false negatives, which is the failure mode a blunter "escalate less" instruction would
+have caused. Token attribution barely moved (tool definitions 21–24%, residual ~2%) —
+the instrument stayed stable while the behaviour it measured improved.
 
 📖 **[Methodology and what's measurable](docs/transparency_spec.md)**
 
