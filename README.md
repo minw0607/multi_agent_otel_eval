@@ -338,13 +338,15 @@ Aligned with the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetr
 
 ---
 
-<a id="disclaimer"></a>
-
-## 🧾 Disclaimer
+## Scope and caveats
 
 Research and evaluation framework. The support-desk corpus is synthetic; company names,
 policies, and orders in it are fictional. Numbers shown are from specific runs and will
 vary by model, provider, and sample. Nothing here constitutes a vendor audit.
+
+<a id="disclaimer"></a>
+
+## 🧾 Disclaimer
 
 This repository is an independent personal project created outside of my employment using my own time and equipment.
 
