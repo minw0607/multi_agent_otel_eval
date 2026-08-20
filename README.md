@@ -9,11 +9,14 @@
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-GenAI%20SemConv-425CC7?logo=opentelemetry)](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
 [![LangChain](https://img.shields.io/badge/LangChain-LangGraph-1C3C3C)](https://langchain.com)
 [![Provider agnostic](https://img.shields.io/badge/LLM-provider--agnostic-412991)](docs/provider-setup.md)
+[![Project: Independent & Personal](https://img.shields.io/badge/Project-Independent%20%26%20Personal-lightgrey)](#disclaimer)
 
 *OpenTelemetry tracing · hybrid + outcome evaluation · safety validation · audit-grade reporting*
 *— and a token-level zoom-in that the same instrumentation makes possible*
 
 </div>
+
+> **Status:** Independent personal research project
 
 ---
 
@@ -335,11 +338,21 @@ Aligned with the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetr
 
 ---
 
-## Disclaimer
+<a id="disclaimer"></a>
+
+## 🧾 Disclaimer
 
 Research and evaluation framework. The support-desk corpus is synthetic; company names,
 policies, and orders in it are fictional. Numbers shown are from specific runs and will
 vary by model, provider, and sample. Nothing here constitutes a vendor audit.
+
+This repository is an independent personal project created outside of my employment using my own time and equipment.
+
+Unless explicitly stated otherwise, the code, notebooks, demonstrations, analyses, and documentation in this repository are developed independently, using only publicly available research papers, technical documentation, regulations, and other public sources. They do not rely on, incorporate, or disclose any confidential, proprietary, non-public, or client information obtained through my employment or professional engagements.
+
+The views, designs, implementations, and conclusions expressed in this repository are solely my own and do not represent the views of any employer, client, or affiliated organization.
+
+This repository is provided for research and educational purposes only.
 
 ---
 
